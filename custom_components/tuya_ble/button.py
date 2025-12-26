@@ -142,21 +142,7 @@ mapping: dict[str, TuyaBLECategoryButtonMapping] = {
                     ),
                 ),
             ],
-            "rlyxv7pe":  # Gimdow Smart Lock
-            [
-                TuyaBLELockMapping(
-                    dp_id=6,
-                    description=ButtonEntityDescription(
-                        key="manual_unlock",
-                    ),
-                ),
-                TuyaBLELockMapping(
-                    dp_id=46,
-                    description=ButtonEntityDescription(
-                        key="manual_lock",
-                    ),
-                ),
-            ]
+
         },
     ),
 }
