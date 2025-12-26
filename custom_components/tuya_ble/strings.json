@@ -35,6 +35,12 @@
       },
       "ble_unlock_check": {
         "name": "Unlock"
+      },
+      "manual_unlock": {
+        "name": "Unlock"
+      },
+      "manual_lock": {
+        "name": "Lock"
       }
     },
     "number": {
@@ -101,6 +107,9 @@
     "binary_sensor": {
       "low_battery": {
         "name": "[%key:component::sensor::entity_component::battery::name%]"
+      },
+      "lock_motor_state": {
+        "name": "Lock state"
       }
     },
     "sensor": {

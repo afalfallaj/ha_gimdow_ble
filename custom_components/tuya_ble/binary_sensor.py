@@ -67,6 +67,21 @@ mapping: dict[str, TuyaBLECategoryBinarySensorMapping] = {
             ],
         },
     ),
+    "jtmspro": TuyaBLECategoryBinarySensorMapping(
+        products={
+            "rlyxv7pe":  # Smart Lock
+            [
+                TuyaBLEBinarySensorMapping(
+                    dp_id=47,
+                    description=BinarySensorEntityDescription(
+                        key="lock_motor_state",
+                        #icon="mdi:battery-alert",
+                        device_class=BinarySensorDeviceClass.LOCK,
+                    ),
+                ),
+            ]
+        }
+    ),      
 }
 
 
