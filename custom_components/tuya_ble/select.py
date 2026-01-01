@@ -34,6 +34,7 @@ class TuyaBLESelectMapping:
     description: SelectEntityDescription
     force_add: bool = True
     dp_type: TuyaBLEDataPointType | None = None
+    value_mapping: dict[str, str] | None = None
 
 
 @dataclass
@@ -150,6 +151,27 @@ mapping: dict[str, TuyaBLECategorySelectMapping] = {
                         ],
                         entity_category=EntityCategory.CONFIG,
                     ),
+                ),
+                TuyaBLESelectMapping(
+                    dp_id=68,
+                    description=SelectEntityDescription(
+                        key="configuration",
+                        icon="mdi:function",
+                        options=[
+                            "Recalibrate",
+                            "Unlock more",
+                            "Keep retracted",
+                            "Add force",
+                        ],
+                        entity_category=EntityCategory.CONFIG,
+                    ),
+                    value_mapping={
+                        "function1": "Recalibrate",
+                        "function2": "Unlock more",
+                        "function3": "Keep retracted",
+                        "function4": "Add force",
+                    },
+                    dp_type=TuyaBLEDataPointType.DT_STRING,
                 ),
             ],
         }
@@ -348,7 +370,9 @@ class TuyaBLESelect(TuyaBLEEntity, SelectEntity):
         datapoint = self._device.datapoints[self._mapping.dp_id]
         if datapoint:
             value = datapoint.value
-            if value >= 0 and value < len(self._attr_options):
+            if self._mapping.value_mapping:
+                return self._mapping.value_mapping.get(value)
+            elif isinstance(value, int) and value >= 0 and value < len(self._attr_options):
                 return self._attr_options[value]
             else:
                 return value
@@ -357,14 +381,30 @@ class TuyaBLESelect(TuyaBLEEntity, SelectEntity):
     def select_option(self, value: str) -> None:
         """Change the selected option."""
         if value in self._attr_options:
-            int_value = self._attr_options.index(value)
-            datapoint = self._device.datapoints.get_or_create(
-                self._mapping.dp_id,
-                TuyaBLEDataPointType.DT_ENUM,
-                int_value,
-            )
-            if datapoint:
-                self._hass.create_task(datapoint.set_value(int_value))
+            if self._mapping.value_mapping:
+                key = next(
+                    (k for k, v in self._mapping.value_mapping.items() if v == value),
+                    None
+                )
+                if key:
+                     # For string/enum mapped values, we send the key (e.g. "function1")
+                    dptype = self._mapping.dp_type or TuyaBLEDataPointType.DT_STRING
+                    datapoint = self._device.datapoints.get_or_create(
+                        self._mapping.dp_id,
+                        dptype,
+                        key,
+                    )
+                    if datapoint:
+                        self._hass.create_task(datapoint.set_value(key))
+            else:
+                int_value = self._attr_options.index(value)
+                datapoint = self._device.datapoints.get_or_create(
+                    self._mapping.dp_id,
+                    TuyaBLEDataPointType.DT_ENUM,
+                    int_value,
+                )
+                if datapoint:
+                    self._hass.create_task(datapoint.set_value(int_value))
 
 
 async def async_setup_entry(

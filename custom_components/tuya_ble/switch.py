@@ -175,6 +175,27 @@ mapping: dict[str, TuyaBLECategorySwitchMapping] = {
             ),
         }
     ),
+    "jtmspro": TuyaBLECategorySwitchMapping(
+        products={
+            "rlyxv7pe": [  # Gimdow
+                TuyaBLESwitchMapping(
+                    dp_id=33,
+                    description=SwitchEntityDescription(
+                        key="auto_lock",
+                        icon="mdi:lock-clock",
+                        entity_category=EntityCategory.CONFIG,
+                    ),
+                ),
+                TuyaBLESwitchMapping(
+                    dp_id=78,
+                    description=SwitchEntityDescription(
+                        key="change_direction",
+                        entity_category=EntityCategory.CONFIG,
+                    ),
+                ),
+            ],
+        },
+    ),
     "szjqr": TuyaBLECategorySwitchMapping(
         products={
             **dict.fromkeys(

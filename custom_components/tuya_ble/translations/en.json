@@ -49,6 +49,9 @@
             },
             "manual_lock": {
                 "name": "Lock"
+            },
+            "sync_clock": {
+                "name": "Sync clock"
             }
         },
         "number": {
@@ -84,6 +87,9 @@
             },
             "ble_unlock_check": {
               "name": "Unlock"
+            },
+            "auto_lock_time": {
+                "name": "Auto lock time"
             }
         },
         "select": {
@@ -110,6 +116,15 @@
             },
             "temperature_unit": {
                 "name": "Temperature unit"
+            },
+            "configuration": {
+                "name": "Configuration",
+                "state": {
+                    "recalibrate": "Recalibrate",
+                    "unlock_more": "Unlock more",
+                    "keep_retracted": "Keep retracted",
+                    "add_force": "Add force"
+                }
             }
         },
         "sensor": {
@@ -233,6 +248,12 @@
             },
             "window_check": {
                 "name": "Window Check"
+            },
+            "auto_lock": {
+                "name": "Auto-lock"
+            },
+            "change_direction": {
+                "name": "Change direction"
             }
         },
         "text": {

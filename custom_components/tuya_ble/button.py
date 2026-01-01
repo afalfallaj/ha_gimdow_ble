@@ -142,6 +142,17 @@ mapping: dict[str, TuyaBLECategoryButtonMapping] = {
                     ),
                 ),
             ],
+            "rlyxv7pe":  # Gimdow
+            [
+                TuyaBLEButtonMapping(
+                    dp_id=44,
+                    description=ButtonEntityDescription(
+                        key="sync_clock",
+                        icon="mdi:clock",
+                        entity_category=EntityCategory.CONFIG,
+                    ),
+                ),
+            ],
 
         },
     ),

@@ -41,6 +41,9 @@
       },
       "manual_lock": {
         "name": "Lock"
+      },
+      "sync_clock": {
+        "name": "Sync clock"
       }
     },
     "number": {
@@ -79,6 +82,9 @@
       },
       "language": {
           "name": "Lock Language"
+      },
+      "auto_lock_time": {
+        "name": "Auto lock time"
       }
     },
     "select": {
@@ -102,6 +108,15 @@
       },
       "beep_volume": {
           "name": "Lock Volume"
+      },
+      "configuration": {
+        "name": "Configuration",
+        "state": {
+          "recalibrate": "Recalibrate",
+          "unlock_more": "Unlock more",
+          "keep_retracted": "Keep retracted",
+          "add_force": "Add force"
+        }
       }
     },
     "binary_sensor": {
@@ -233,7 +248,13 @@
       },            
       "water_valve": {
           "name": "Irrigation valve"
-      }    
+      },
+      "auto_lock": {
+        "name": "Auto-lock"
+      },
+      "change_direction": {
+        "name": "Change direction"
+      }
     },
     "text": {
       "program": {
