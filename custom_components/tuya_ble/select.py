@@ -155,7 +155,7 @@ mapping: dict[str, TuyaBLECategorySelectMapping] = {
                 TuyaBLESelectMapping(
                     dp_id=68,
                     description=SelectEntityDescription(
-                        key="configuration",
+                        key="special_function",
                         icon="mdi:function",
                         options=[
                             "Recalibrate",
@@ -165,13 +165,6 @@ mapping: dict[str, TuyaBLECategorySelectMapping] = {
                         ],
                         entity_category=EntityCategory.CONFIG,
                     ),
-                    value_mapping={
-                        "function1": "Recalibrate",
-                        "function2": "Unlock more",
-                        "function3": "Keep retracted",
-                        "function4": "Add force",
-                    },
-                    dp_type=TuyaBLEDataPointType.DT_STRING,
                 ),
             ],
         }

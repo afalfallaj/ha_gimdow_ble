@@ -117,7 +117,7 @@
             "temperature_unit": {
                 "name": "Temperature unit"
             },
-            "configuration": {
+            "special_function": {
                 "name": "Configuration",
                 "state": {
                     "recalibrate": "Recalibrate",
