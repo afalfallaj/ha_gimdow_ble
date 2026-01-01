@@ -46,16 +46,16 @@
         "name": "Sync clock"
       },
       "recalibrate": {
-        "name": "Recalibrate"
+        "name": "Calibration: Recalibrate"
       },
       "unlock_more": {
-        "name": "Unlock more"
+        "name": "Calibration: Unlock more"
       },
       "keep_retracted": {
-        "name": "Keep retracted"
+        "name": "Calibration: Keep retracted"
       },
       "add_force": {
-        "name": "Add force"
+        "name": "Calibration: Add force"
       }
     },
     "number": {
@@ -253,7 +253,7 @@
           "name": "Irrigation valve"
       },
       "auto_lock": {
-        "name": "Auto-lock"
+        "name": "Auto lock"
       },
       "change_direction": {
         "name": "Change direction"
