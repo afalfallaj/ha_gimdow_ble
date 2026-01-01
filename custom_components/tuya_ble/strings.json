@@ -44,6 +44,18 @@
       },
       "sync_clock": {
         "name": "Sync clock"
+      },
+      "recalibrate": {
+        "name": "Recalibrate"
+      },
+      "unlock_more": {
+        "name": "Unlock more"
+      },
+      "keep_retracted": {
+        "name": "Keep retracted"
+      },
+      "add_force": {
+        "name": "Add force"
       }
     },
     "number": {
@@ -108,15 +120,6 @@
       },
       "beep_volume": {
           "name": "Lock Volume"
-      },
-      "special_function": {
-        "name": "Configuration",
-        "state": {
-          "recalibrate": "Recalibrate",
-          "unlock_more": "Unlock more",
-          "keep_retracted": "Keep retracted",
-          "add_force": "Add force"
-        }
       }
     },
     "binary_sensor": {

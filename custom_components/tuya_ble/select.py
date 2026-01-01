@@ -152,20 +152,6 @@ mapping: dict[str, TuyaBLECategorySelectMapping] = {
                         entity_category=EntityCategory.CONFIG,
                     ),
                 ),
-                TuyaBLESelectMapping(
-                    dp_id=68,
-                    description=SelectEntityDescription(
-                        key="special_function",
-                        icon="mdi:function",
-                        options=[
-                            "Recalibrate",
-                            "Unlock more",
-                            "Keep retracted",
-                            "Add force",
-                        ],
-                        entity_category=EntityCategory.CONFIG,
-                    ),
-                ),
             ],
         }
     ),

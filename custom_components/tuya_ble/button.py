@@ -4,7 +4,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 
 import logging
-from typing import Callable
+from typing import Any, Callable
 
 from homeassistant.components.button import (
     ButtonEntityDescription,
@@ -33,6 +33,7 @@ class TuyaBLEButtonMapping:
     force_add: bool = True
     dp_type: TuyaBLEDataPointType | None = None
     is_available: TuyaBLEButtonIsAvailable = None
+    value: Any | None = None
 
 
 def is_fingerbot_in_push_mode(self: TuyaBLEButton, product: TuyaBLEProductInfo) -> bool:
@@ -153,6 +154,46 @@ mapping: dict[str, TuyaBLECategoryButtonMapping] = {
                         entity_category=EntityCategory.CONFIG,
                     ),
                 ),
+                TuyaBLEButtonMapping(
+                    dp_id=68,
+                    description=ButtonEntityDescription(
+                        key="recalibrate",
+                        icon="mdi:wrench",
+                        entity_category=EntityCategory.CONFIG,
+                    ),
+                    value=0,
+                    dp_type=TuyaBLEDataPointType.DT_ENUM,
+                ),
+                TuyaBLEButtonMapping(
+                    dp_id=68,
+                    description=ButtonEntityDescription(
+                        key="unlock_more",
+                        icon="mdi:lock-open-plus",
+                        entity_category=EntityCategory.CONFIG,
+                    ),
+                    value=1,
+                    dp_type=TuyaBLEDataPointType.DT_ENUM,
+                ),
+                TuyaBLEButtonMapping(
+                    dp_id=68,
+                    description=ButtonEntityDescription(
+                        key="keep_retracted",
+                        icon="mdi:lock-open-variant",
+                        entity_category=EntityCategory.CONFIG,
+                    ),
+                    value=2,
+                    dp_type=TuyaBLEDataPointType.DT_ENUM,
+                ),
+                TuyaBLEButtonMapping(
+                    dp_id=68,
+                    description=ButtonEntityDescription(
+                        key="add_force",
+                        icon="mdi:arm-flex",
+                        entity_category=EntityCategory.CONFIG,
+                    ),
+                    value=3,
+                    dp_type=TuyaBLEDataPointType.DT_ENUM,
+                ),
             ],
 
         },
@@ -190,13 +231,16 @@ class TuyaBLEButton(TuyaBLEEntity, ButtonEntity):
 
     def press(self) -> None:
         """Press the button."""
+        dptype = self._mapping.dp_type or TuyaBLEDataPointType.DT_BOOL
         datapoint = self._device.datapoints.get_or_create(
             self._mapping.dp_id,
-            TuyaBLEDataPointType.DT_BOOL,
-            False,
+            dptype,
+            False if dptype == TuyaBLEDataPointType.DT_BOOL else 0,
         )
         if datapoint:
-            if self._product.lock:
+            if self._mapping.value is not None:
+                self._hass.create_task(datapoint.set_value(self._mapping.value))
+            elif self._product.lock:
                 #Gimdow need true to activate lock/unlock commands
                 self._hass.create_task(datapoint.set_value(True))
             else:
