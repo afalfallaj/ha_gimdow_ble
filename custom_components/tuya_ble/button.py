@@ -178,7 +178,7 @@ mapping: dict[str, TuyaBLECategoryButtonMapping] = {
                     dp_id=68,
                     description=ButtonEntityDescription(
                         key="keep_retracted",
-                        icon="mdi:lock-open-variant",
+                        icon="mdi:lock-open-minus",
                         entity_category=EntityCategory.CONFIG,
                     ),
                     value=2,
