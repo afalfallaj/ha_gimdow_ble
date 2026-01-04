@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 from threading import Timer
-from .tuya_ble import TuyaBLEDataPointType
+from .gimdow_ble import TuyaBLEDataPointType
 
 import logging
 from homeassistant.const import CONF_ADDRESS, CONF_DEVICE_ID
@@ -22,7 +22,7 @@ from homeassistant.helpers.update_coordinator import (
 )
 
 from home_assistant_bluetooth import BluetoothServiceInfoBleak
-from .tuya_ble import (
+from .gimdow_ble import (
     AbstaractTuyaBLEDeviceManager,
     TuyaBLEDataPoint,
     TuyaBLEDevice,
@@ -33,35 +33,24 @@ from .cloud import HASSTuyaBLEDeviceManager
 from .const import (
     DEVICE_DEF_MANUFACTURER,
     DOMAIN,
-    FINGERBOT_BUTTON_EVENT,
     SET_DISCONNECTED_DELAY,
     DPCode,
     DPType,
 )
 
 from .base import IntegerTypeData, EnumTypeData
-from .tuya_ble import TuyaBLEDataPointType, TuyaBLEDevice
+from .gimdow_ble import TuyaBLEDataPointType, TuyaBLEDevice
 
 _LOGGER = logging.getLogger(__name__)
 
 
-@dataclass
-class TuyaBLEFingerbotInfo:
-    switch: int
-    mode: int
-    up_position: int
-    down_position: int
-    hold_time: int
-    reverse_positions: int
-    manual_control: int = 0
-    program: int = 0
+
 
 
 @dataclass
 class TuyaBLEProductInfo:
     name: str
     manufacturer: str = DEVICE_DEF_MANUFACTURER
-    fingerbot: TuyaBLEFingerbotInfo | None = None
     lock: int | None = None
 
 class TuyaBLEEntity(CoordinatorEntity):
@@ -287,17 +276,6 @@ class TuyaBLECoordinator(DataUpdateCoordinator[None]):
         """Just trigger the callbacks."""
         self._async_handle_connect()
         self.async_set_updated_data(None)
-        info = get_device_product_info(self._device)
-        if info and info.fingerbot and info.fingerbot.manual_control != 0:
-            for update in updates:
-                if update.id == info.fingerbot.switch and update.changed_by_device:
-                    self.hass.bus.fire(
-                        FINGERBOT_BUTTON_EVENT,
-                        {
-                            CONF_ADDRESS: self._device.address,
-                            CONF_DEVICE_ID: self._device.device_id,
-                        },
-                    )
 
     @callback
     def _set_disconnected(self, _: None) -> None:
@@ -334,31 +312,8 @@ class TuyaBLECategoryInfo:
 
 
 devices_database: dict[str, TuyaBLECategoryInfo] = {
-    "co2bj": TuyaBLECategoryInfo(
-        products={
-            "59s19z5m": TuyaBLEProductInfo(  # device product_id
-                name="CO2 Detector",
-            ),
-        },
-    ),
-    "ms": TuyaBLECategoryInfo(
-        products={
-            **dict.fromkeys(
-                [
-                    "ludzroix",
-                    "isk2p555"
-                ],
-                    TuyaBLEProductInfo(  # device product_id
-                    name="Smart Lock",
-                ),
-            ),
-        },
-    ),
     "jtmspro": TuyaBLECategoryInfo(
         products={
-            "xicdxood": TuyaBLEProductInfo(  # device product_id
-                name="Raycube K7 Pro+",
-            ),
             "rlyxv7pe":  # Gimdow device product_id
             TuyaBLEProductInfo(
                 name="A1 PRO MAX",
@@ -366,161 +321,6 @@ devices_database: dict[str, TuyaBLECategoryInfo] = {
                 lock=1,
             ),
         },
-    ),
-    "szjqr": TuyaBLECategoryInfo(
-        products={
-            "3yqdo5yt": TuyaBLEProductInfo(  # device product_id
-                name="CUBETOUCH 1s",
-                fingerbot=TuyaBLEFingerbotInfo(
-                    switch=1,
-                    mode=2,
-                    up_position=5,
-                    down_position=6,
-                    hold_time=3,
-                    reverse_positions=4,
-                ),
-            ),
-            "xhf790if": TuyaBLEProductInfo(  # device product_id
-                name="CubeTouch II",
-                fingerbot=TuyaBLEFingerbotInfo(
-                    switch=1,
-                    mode=2,
-                    up_position=5,
-                    down_position=6,
-                    hold_time=3,
-                    reverse_positions=4,
-                ),
-            ),
-            **dict.fromkeys(
-                [
-                    "blliqpsj",
-                    "ndvkgsrm",
-                    "yiihr7zh",
-                    "riecov42",
-                    "neq16kgd"
-                ],  # device product_ids
-                TuyaBLEProductInfo(
-                    name="Fingerbot Plus",
-                    fingerbot=TuyaBLEFingerbotInfo(
-                        switch=2,
-                        mode=8,
-                        up_position=15,
-                        down_position=9,
-                        hold_time=10,
-                        reverse_positions=11,
-                        manual_control=17,
-                        program=121,
-                    ),
-                ),
-            ),
-            **dict.fromkeys(
-                [
-                    "ltak7e1p",
-                    "y6kttvd6",
-                    "yrnk7mnn",
-                    "nvr2rocq",
-                    "bnt7wajf",
-                    "rvdceqjh",
-                    "5xhbk964",
-                ],  # device product_ids
-                TuyaBLEProductInfo(
-                    name="Fingerbot",
-                    fingerbot=TuyaBLEFingerbotInfo(
-                        switch=2,
-                        mode=8,
-                        up_position=15,
-                        down_position=9,
-                        hold_time=10,
-                        reverse_positions=11,
-                        program=121,
-                    ),
-                ),
-            ),
-        },
-    ),
-    "kg": TuyaBLECategoryInfo(
-        products={
-            **dict.fromkeys(
-                [
-                    "mknd4lci",
-                    "riecov42"
-                ],  # device product_ids
-                TuyaBLEProductInfo(
-                    name="Fingerbot Plus",
-                    fingerbot=TuyaBLEFingerbotInfo(
-                        switch=1,
-                        mode=101,
-                        up_position=106,
-                        down_position=102,
-                        hold_time=103,
-                        reverse_positions=104,
-                        manual_control=107,
-                        program=109,
-                    ),
-                ),
-            ),
-        },
-    ),
-    "wk": TuyaBLECategoryInfo(
-        products={
-            **dict.fromkeys(
-            [
-            "drlajpqc", 
-            "nhj2j7su",
-            ],  # device product_id
-            TuyaBLEProductInfo(  
-                name="Thermostatic Radiator Valve",
-                ),
-            ),
-        },
-    ),
-    "wsdcg": TuyaBLECategoryInfo(
-        products={
-            "ojzlzzsw": TuyaBLEProductInfo(  # device product_id
-                name="Soil moisture sensor",
-            ),
-        },
-    ),
-    "znhsb": TuyaBLECategoryInfo(
-        products={
-            "cdlandip":  # device product_id
-            TuyaBLEProductInfo(
-                name="Smart water bottle",
-            ),
-        },
-    ),
-    "ggq": TuyaBLECategoryInfo(
-        products={
-            "6pahkcau":  # device product_id
-            TuyaBLEProductInfo(
-                name="Irrigation computer",
-            ),
-        },
-    ),
-    "sfkzq": TuyaBLECategoryInfo(
-        products={
-            "0axr5s0b":  # device product_id
-            TuyaBLEProductInfo(
-                name="Valve controller",
-            ),
-        },
-    ),
-    "dd": TuyaBLECategoryInfo(
-        products={
-            **dict.fromkeys(
-            [
-              "nvfrtxlq",
-            ],  # device product_id
-            TuyaBLEProductInfo(
-                name="LGB102 Magic Strip Lights",
-                manufacturer="Magiacous",
-		),
-            ),
-        },
-        info = TuyaBLEProductInfo(
-                name="Strip Lights",
-		),
-
     ),
 }
 
@@ -600,4 +400,3 @@ def get_device_info(device: TuyaBLEDevice) -> DeviceInfo | None:
         ),
     )
     return result
-

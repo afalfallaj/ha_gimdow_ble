@@ -18,7 +18,7 @@ from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
 
 from .const import DOMAIN
 from .devices import TuyaBLEData, TuyaBLEEntity, TuyaBLEProductInfo
-from .tuya_ble import TuyaBLEDataPointType, TuyaBLEDevice
+from .gimdow_ble import TuyaBLEDataPointType, TuyaBLEDevice
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -36,33 +36,6 @@ class TuyaBLEButtonMapping:
     value: Any | None = None
 
 
-def is_fingerbot_in_push_mode(self: TuyaBLEButton, product: TuyaBLEProductInfo) -> bool:
-    result: bool = True
-    if product.fingerbot:
-        datapoint = self._device.datapoints[product.fingerbot.mode]
-        if datapoint:
-            result = datapoint.value == 0
-    return result
-
-
-@dataclass
-class TuyaBLEFingerbotModeMapping(TuyaBLEButtonMapping):
-    description: ButtonEntityDescription = field(
-        default_factory=lambda: ButtonEntityDescription(
-            key="push",
-        )
-    )
-    is_available: TuyaBLEButtonIsAvailable = is_fingerbot_in_push_mode
-
-@dataclass
-class TuyaBLELockMapping(TuyaBLEButtonMapping):
-    description: ButtonEntityDescription = field(
-        default_factory=lambda: ButtonEntityDescription(
-            key="push",
-        )
-    )
-    is_available: TuyaBLEButtonIsAvailable = 0
-
 @dataclass
 class TuyaBLECategoryButtonMapping:
     products: dict[str, list[TuyaBLEButtonMapping]] | None = None
@@ -70,80 +43,8 @@ class TuyaBLECategoryButtonMapping:
 
 
 mapping: dict[str, TuyaBLECategoryButtonMapping] = {
-    "szjqr": TuyaBLECategoryButtonMapping(
-        products={
-            **dict.fromkeys(
-                ["3yqdo5yt", "xhf790if"],  # CubeTouch 1s and II
-                [
-                    TuyaBLEFingerbotModeMapping(dp_id=1),
-                ],
-            ),
-            **dict.fromkeys(
-                [
-                    "blliqpsj",
-                    "ndvkgsrm",
-                    "riecov42",
-                    "yiihr7zh", 
-                    "neq16kgd"
-                ],  # Fingerbot Plus
-                [
-                    TuyaBLEFingerbotModeMapping(dp_id=2),
-                ],
-            ),
-            **dict.fromkeys(
-                [
-                    "ltak7e1p",
-                    "y6kttvd6",
-                    "yrnk7mnn",
-                    "nvr2rocq",
-                    "bnt7wajf",
-                    "rvdceqjh",
-                    "5xhbk964",
-                ],  # Fingerbot
-                [
-                    TuyaBLEFingerbotModeMapping(dp_id=2),
-                ],
-            ),
-        },
-    ),
-    "kg": TuyaBLECategoryButtonMapping(
-        products={
-            **dict.fromkeys(
-                [
-                    "mknd4lci",
-                    "riecov42"
-                ],  # Fingerbot Plus
-                [
-                    TuyaBLEFingerbotModeMapping(dp_id=108),
-                ],
-            ),
-        },
-    ),
-    "znhsb": TuyaBLECategoryButtonMapping(
-        products={
-            "cdlandip":  # Smart water bottle
-            [
-                TuyaBLEButtonMapping(
-                    dp_id=109,
-                    description=ButtonEntityDescription(
-                        key="bright_lid_screen",
-                    ),
-                ),
-            ],
-        },
-    ),
     "jtmspro": TuyaBLECategoryButtonMapping(
         products={
-            "xicdxood":  # Raycube K7 Pro+
-            [
-                TuyaBLEButtonMapping(
-                    dp_id=71, # On click it opens the lock, just like connecting via Smart Life App and holding the center button
-                    description=ButtonEntityDescription(
-                        key="ble_unlock_check",
-                        icon="mdi:lock-open-variant-outline",
-                    ),
-                ),
-            ],
             "rlyxv7pe":  # Gimdow
             [
                 TuyaBLEButtonMapping(

@@ -1,64 +1,60 @@
-# Home Assistant support for Tuya BLE devices
+# Gimdow A1 Pro Max BLE for Home Assistant
 
-## Overview
+**Specialized Home Assistant integration for Gimdow A1 Pro Max Smart Locks (Model A1) via Bluetooth Low Energy (BLE).**
 
-This integration supports Tuya devices connected via BLE.
+## Features
 
-_Inspired by code of [@redphx](https://github.com/redphx/poc-tuya-ble-fingerbot)_
+- **Lock Control**: Lock and Unlock your Gimdow device.
+- **Status Reporting**: Real-time lock state and battery level.
+- **Configuration**:
+  - Auto-lock timer
+  - Motor direction
+  - Lock volume
+- **Calibration**: Dedicated buttons for mechanical calibration:
+  - Sync Clock
+  - Recalibrate
+  - Unlock More
+  - Keep Retracted
+  - Add Force
+
+## Supported Devices
+
+- **Gimdow A1 Pro Max** (Product ID: `rlyxv7pe`)
+  - *Note: This integration is hardcoded for this specific device. Other Gimdow models may work but are not officially tested.*
 
 ## Installation
 
-Place the `custom_components` folder in your configuration directory (or add its contents to an existing `custom_components` folder). Alternatively install via [HACS](https://hacs.xyz/).
+### Option 1: HACS (Recommended)
+1. Add this repository to HACS as a custom repository.
+2. Search for "Gimdow A1 Pro Max BLE" and install.
+3. Restart Home Assistant.
 
-[![Open your Home Assistant instance and open a repository inside the Home Assistant Community Store.](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=airy10&repository=ha_tuya_ble&category=integration)
+### Option 2: Manual
+1. Copy the `custom_components/tuya_ble` folder to your `config/custom_components/` directory.
+2. Restart Home Assistant.
+
+## Setup
+
+Although this integration communicates locally via Bluetooth, it requires **Tuya Cloud** credentials to obtain the initial encryption keys for your device.
+
+1. Go to **Settings > Devices & Services**.
+2. Click **Add Integration** and search for **Gimdow A1 Pro Max BLE**.
+3. Enter your Tuya IoT credentials (Access ID, Access Secret, etc.).
+   - *Refer to the [official Tuya integration documentation](https://www.home-assistant.io/integrations/tuya/) for instructions on how to get these credentials.*
+4. Select your Gimdow device from the discovered list.
 
 ## Usage
 
-After adding to Home Assistant integration should discover all supported Bluetooth devices, or you can add discoverable devices manually.
+Once added, the following entities will be available:
 
-The integration works locally, but connection to Tuya BLE device requires device ID and encryption key from Tuya IOT cloud. It could be obtained using the same credentials as in official Tuya integration. To obtain the credentials, please refer to official Tuya integration [documentation](https://www.home-assistant.io/integrations/tuya/)
+- **Lock Details**: The main lock entity.
+- **Buttons**: Use these to trigger specific calibration actions (e.g., if the lock isn't fully engaging, press "Unlock More" or "Add Force").
+- **Numbers/Selects**: Adjust timeout settings and sound volume directly from Home Assistant.
 
-## Supported devices list
+## Troubleshooting
 
-* Fingerbots (category_id 'szjqr')
-  + Fingerbot (product_ids 'ltak7e1p', 'y6kttvd6', 'yrnk7mnn', 'nvr2rocq', 'bnt7wajf', 'rvdceqjh', '5xhbk964'), original device, first in category, powered by CR2 battery.
-  + Adaprox Fingerbot (product_id 'y6kttvd6'), built-in battery with USB type C charging.
-  + Fingerbot Plus (product_ids 'blliqpsj', 'ndvkgsrm', 'yiihr7zh', 'neq16kgd'), almost same as original, has sensor button for manual control.
-  + CubeTouch 1s (product_id '3yqdo5yt'), built-in battery with USB type C charging.
-  + CubeTouch II (product_id 'xhf790if'), built-in battery with USB type C charging.
+- **Delay**: Bluetooth Low Energy can have a slight delay. This is normal.
+- **Range**: Ensure your Home Assistant server (or Bluetooth proxy) is within range of the lock.
 
-  All features available in Home Assistant, programming (series of actions) is implemented for Fingerbot Plus.
-  For programming exposed entities 'Program' (switch), 'Repeat forever', 'Repeats count', 'Idle position' and 'Program' (text). Format of program text is: 'position\[/time\];...' where position is in percents, optional time is in seconds (zero if missing).
-
-* Temperature and humidity sensors (category_id 'wsdcg')
-  + Soil moisture sensor (product_id 'ojzlzzsw').
-
-* CO2 sensors (category_id 'co2bj')
-  + CO2 Detector (product_id '59s19z5m').
-
-* Smart Locks (category_id 'ms', 'jtmspro')
-  + Smart Lock (product_id 'ludzroix', 'isk2p555').
-  + Raybuke K7 Pro+ (product_id 'xicdxood'), supports ble unlock and other small features.
-
-* Climate (category_id 'wk')
-  + Thermostatic Radiator Valve (product_ids 'drlajpqc', 'nhj2j7su').
-
-* Smart water bottle (category_id 'znhsb')
-  + Smart water bottle (product_id 'cdlandip')
-
-* Irrigation computer (category_id 'ggq')
-  + Irrigation computer (product_id '6pahkcau')
-
-* Lights
-  + Most BLE light products should be supported as the Light class tries to get device description from the cloud when there are added but only Strip Lights (category_id 'dd') Magiacous RGB light bar (product_id 'nvfrtxlq') has has been tested
-    
-    *Note that some light products are using Bluetooth Mesh protocols and not BLE and so aren't compatible with this integration. That's probably the case if your product isn't at least found (even if non-working) by this integration*
-
-## Support project
-
-I am working on this integration in Ukraine. Our country was subjected to brutal aggression by Russia. The war still continues. The capital of Ukraine - Kyiv, where I live, and many other cities and villages are constantly under threat of rocket attacks. Our air defense forces are doing wonders, but they also need support. So if you want to help the development of this integration, donate some money and I will spend it to support our air defense.
-<br><br>
-<p align="center">
-  <a href="https://www.buymeacoffee.com/3PaK6lXr4l"><img src="https://www.buymeacoffee.com/assets/img/custom_images/orange_img.png" alt="Buy me an air defense"></a>
-</p>
-
+---
+*Based on the work of [@airy10](https://github.com/airy10) and [@redphx](https://github.com/redphx).*

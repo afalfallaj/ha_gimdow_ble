@@ -29,7 +29,7 @@ from tuya_iot import (
     TuyaOpenMQ,
 )
 
-from .tuya_ble import (
+from .gimdow_ble import (
     AbstaractTuyaBLEDeviceManager,
     TuyaBLEDevice,
     TuyaBLEDeviceCredentials,

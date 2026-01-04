@@ -12,7 +12,7 @@ from homeassistant.const import CONF_ADDRESS, EVENT_HOMEASSISTANT_STOP, Platform
 from homeassistant.core import Event, HomeAssistant, callback
 from homeassistant.exceptions import ConfigEntryNotReady
 
-from .tuya_ble import TuyaBLEDevice
+from .gimdow_ble import TuyaBLEDevice
 
 from .cloud import HASSTuyaBLEDeviceManager
 from .const import DOMAIN
@@ -20,15 +20,11 @@ from .devices import TuyaBLECoordinator, TuyaBLEData, get_device_product_info
 
 PLATFORMS: list[Platform] = [
     Platform.BUTTON,
-    Platform.CLIMATE,
     Platform.NUMBER,
     Platform.SENSOR,
-    Platform.BINARY_SENSOR,
     Platform.LOCK,
-    Platform.LIGHT,
     Platform.SELECT,
     Platform.SWITCH,
-    Platform.TEXT,
 ]
 
 _LOGGER = logging.getLogger(__name__)

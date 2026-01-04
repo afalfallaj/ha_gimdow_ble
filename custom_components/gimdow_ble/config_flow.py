@@ -28,7 +28,7 @@ from homeassistant.const import (
 from homeassistant.core import callback
 from homeassistant.data_entry_flow import FlowHandler, FlowResult
 
-from .tuya_ble import SERVICE_UUID, TuyaBLEDeviceCredentials
+from .gimdow_ble import SERVICE_UUID, TuyaBLEDeviceCredentials
 
 from .const import (
     TUYA_COUNTRIES,

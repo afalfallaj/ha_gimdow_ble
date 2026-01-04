@@ -11,7 +11,7 @@ from .manager import (
     AbstaractTuyaBLEDeviceManager,
     TuyaBLEDeviceCredentials,
 )
-from .tuya_ble import TuyaBLEDataPoint, TuyaBLEDevice, TuyaBLEEntityDescription
+from .gimdow_ble import TuyaBLEDataPoint, TuyaBLEDevice, TuyaBLEEntityDescription
 
 
 __all__ = [

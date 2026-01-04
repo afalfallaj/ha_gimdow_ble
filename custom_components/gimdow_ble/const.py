@@ -8,7 +8,7 @@ from tuya_iot import TuyaCloudOpenAPIEndpoint
 
 from dataclasses import dataclass
 
-DOMAIN: Final = "tuya_ble"
+DOMAIN: Final = "gimdow_ble"
 
 DEVICE_METADATA_UUIDS: Final = "uuids"
 
@@ -58,10 +58,7 @@ BATTERY_CHARGED: Final = "charged"
 CO2_LEVEL_NORMAL: Final = "normal"
 CO2_LEVEL_ALARM: Final = "alarm"
 
-FINGERBOT_MODE_PUSH: Final = "push"
-FINGERBOT_MODE_SWITCH: Final = "switch"
-FINGERBOT_MODE_PROGRAM: Final = "program"
-FINGERBOT_BUTTON_EVENT: Final = "fingerbot_button_pressed"
+
 
 class WorkMode(StrEnum):
     """Work modes."""

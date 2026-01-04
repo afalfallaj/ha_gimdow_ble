@@ -1,0 +1,104 @@
+{
+    "config": {
+        "abort": {
+            "no_unconfigured_devices": "No unconfigured devices found."
+        },
+        "error": {
+            "device_not_registered": "Device is not registered in Tuya cloud",
+            "invalid_auth": "[%key:common::config_flow::error::invalid_auth%]",
+            "login_error": "Login error ({code}): {msg}"
+        },
+        "flow_title": "Gimdow A1 Pro Max BLE",
+        "step": {
+            "device": {
+                "data": {
+                    "address": "Gimdow Lock Address"
+                },
+                "description": "Select the Gimdow Lock to setup. The device must be registered in the Tuya cloud using the mobile application. Ensure it is unbound from any Tuya Bluetooth gateway."
+            },
+            "login": {
+                "data": {
+                    "access_id": "Tuya IoT Access ID",
+                    "access_secret": "Tuya IoT Access Secret",
+                    "country_code": "Country",
+                    "password": "[%key:common::config_flow::data::password%]",
+                    "username": "Account"
+                },
+                "description": "This integration requires obtaining an encryption key from the Tuya cloud. This acts as a one-time authorization.\n\nRefer to the official Tuya integration documentation to retrieve your cloud credentials: https://www.home-assistant.io/integrations/tuya/\n\nEnter your Tuya IoT credentials."
+            }
+        }
+    },
+    "entity": {
+        "button": {
+            "sync_clock": {
+                "name": "Sync clock"
+            },
+            "recalibrate": {
+                "name": "Calibration: Recalibrate"
+            },
+            "unlock_more": {
+                "name": "Calibration: Unlock more"
+            },
+            "keep_retracted": {
+                "name": "Calibration: Keep retracted"
+            },
+            "add_force": {
+                "name": "Calibration: Add force"
+            }
+        },
+        "number": {
+            "auto_lock_time": {
+                "name": "Auto lock time"
+            }
+        },
+        "select": {
+            "beep_volume": {
+                "name": "Lock Volume"
+            }
+        },
+        "sensor": {
+            "battery": {
+                "name": "[%key:component::sensor::entity_component::battery::name%]"
+            },
+            "signal_strength": {
+                "name": "[%key:component::sensor::entity_component::signal_strength::name%]"
+            },
+            "unlock_fingerprint": {
+                "name": "Last used Fingerprint"
+            },
+            "unlock_card": {
+                "name": "Last used Card"
+            },
+            "unlock_password": {
+                "name": "Last used Password"
+            }
+        },
+        "switch": {
+            "auto_lock": {
+                "name": "Auto lock"
+            },
+            "change_direction": {
+                "name": "Change direction"
+            }
+        }
+    },
+    "options": {
+        "error": {
+            "device_not_registered": "Device is not registered in Tuya cloud",
+            "invalid_auth": "[%key:common::config_flow::error::invalid_auth%]",
+            "login_error": "Login error ({code}): {msg}"
+        },
+        "step": {
+            "login": {
+                "data": {
+                    "access_id": "Tuya IoT Access ID",
+                    "access_secret": "Tuya IoT Access Secret",
+                    "country_code": "Country",
+                    "password": "[%key:common::config_flow::data::password%]",
+                    "username": "Account"
+                },
+                "description": "Refer to the official Tuya integration documentation to retrieve your cloud credentials: https://www.home-assistant.io/integrations/tuya/\n\nEnter your Tuya IoT credentials."
+            }
+        }
+    }
+}
