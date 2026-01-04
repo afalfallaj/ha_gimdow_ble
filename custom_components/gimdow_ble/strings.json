@@ -5,7 +5,7 @@
     },
     "error": {
       "device_not_registered": "Device is not registered in Tuya cloud",
-      "invalid_auth": "[%key:common::config_flow::error::invalid_auth%]",
+      "invalid_auth": "Invalid Tuya IoT credentials",
       "login_error": "Login error ({code}): {msg}"
     },
     "flow_title": "Gimdow A1 Pro Max BLE",
@@ -21,8 +21,8 @@
           "access_id": "Tuya IoT Access ID",
           "access_secret": "Tuya IoT Access Secret",
           "country_code": "Country",
-          "password": "[%key:common::config_flow::data::password%]",
-          "username": "Account"
+          "password": "Tuya Password",
+          "username": "Tuya Account"
         },
         "description": "This integration requires obtaining an encryption key from the Tuya cloud. This acts as a one-time authorization.\n\nRefer to the official Tuya integration documentation to retrieve your cloud credentials: https://www.home-assistant.io/integrations/tuya/\n\nEnter your Tuya IoT credentials."
       }
@@ -58,10 +58,10 @@
     },
     "sensor": {
       "battery": {
-        "name": "[%key:component::sensor::entity_component::battery::name%]"
+        "name": "Battery"
       },
       "signal_strength": {
-        "name": "[%key:component::sensor::entity_component::signal_strength::name%]"
+        "name": "Signal strength"
       },
       "unlock_fingerprint": {
         "name": "Last used Fingerprint"
@@ -85,7 +85,7 @@
   "options": {
     "error": {
       "device_not_registered": "Device is not registered in Tuya cloud",
-      "invalid_auth": "[%key:common::config_flow::error::invalid_auth%]",
+      "invalid_auth": "Invalid Tuya IoT credentials",
       "login_error": "Login error ({code}): {msg}"
     },
     "step": {
@@ -94,8 +94,8 @@
           "access_id": "Tuya IoT Access ID",
           "access_secret": "Tuya IoT Access Secret",
           "country_code": "Country",
-          "password": "[%key:common::config_flow::data::password%]",
-          "username": "Account"
+          "password": "Tuya Password",
+          "username": "Tuya Account"
         },
         "description": "Refer to the official Tuya integration documentation to retrieve your cloud credentials: https://www.home-assistant.io/integrations/tuya/\n\nEnter your Tuya IoT credentials."
       }
