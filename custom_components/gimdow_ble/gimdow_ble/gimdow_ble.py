@@ -725,25 +725,21 @@ class TuyaBLEDevice:
                     _LOGGER.debug(
                         "%s: Sending device info request", self.address)
                     try:
+                        # Gimdow A1 Pro Max may not respond to device info request or use different format
+                        # We try to send it, but if it fails we proceed anyway as we have credentials from cloud
                         if not await self._send_packet_while_connected(
                             TuyaBLECode.FUN_SENDER_DEVICE_INFO,
                             bytes(0),
                             0,
                             True,
                         ):
-                            self._client = None
-                            _LOGGER.error(
-                                "%s: Sending device info request failed",
+                             _LOGGER.warning(
+                                "%s: Sending device info request failed or timed out, proceeding anyway",
                                 self.address,
                             )
-                            continue
                     except:  # [BLEAK_EXCEPTIONS, BleakNotFoundError]:
-                        self._client = None
-                        _LOGGER.error("%s: Sending device info request failed",
+                        _LOGGER.warning("%s: Sending device info request failed with exception, proceeding",
                                       self.address, exc_info=True)
-                        continue
-                else:
-                    continue
 
                 if self._client and self._client.is_connected:
                     _LOGGER.debug("%s: Sending pairing request", self.address)
