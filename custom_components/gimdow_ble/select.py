@@ -18,6 +18,7 @@ from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
 from homeassistant.helpers.restore_state import RestoreEntity
 
 
+from .const import DOMAIN
 from .devices import TuyaBLEData, TuyaBLEEntity, TuyaBLEProductInfo
 from .gimdow_ble import TuyaBLEDataPointType, TuyaBLEDevice
 
