@@ -15,6 +15,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity import EntityCategory
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
+from homeassistant.helpers.restore_state import RestoreEntity
 
 from .const import (
     DOMAIN,
@@ -320,7 +321,7 @@ def get_mapping_by_device(
         return []
 
 
-class TuyaBLESelect(TuyaBLEEntity, SelectEntity):
+class TuyaBLESelect(TuyaBLEEntity, SelectEntity, RestoreEntity):
     """Representation of a Tuya BLE select."""
 
     def __init__(
@@ -341,6 +342,18 @@ class TuyaBLESelect(TuyaBLEEntity, SelectEntity):
         self._mapping = mapping
         self._attr_options = mapping.description.options
 
+    async def async_added_to_hass(self) -> None:
+        """Handle entity which will be added."""
+        await super().async_added_to_hass()
+
+        if (
+            self._product.lock
+            and self._device.product_id == "rlyxv7pe"
+        ):
+            if (last_state := await self.async_get_last_state()) is not None:
+                if last_state.state != "unknown":
+                    self._attr_current_option = last_state.state
+
     @property
     def current_option(self) -> str | None:
         """Return the selected entity option to represent the entity state."""
@@ -355,6 +368,11 @@ class TuyaBLESelect(TuyaBLEEntity, SelectEntity):
                 return self._attr_options[value]
             else:
                 return value
+        
+        # Fallback for restored state
+        if hasattr(self, "_attr_current_option"):
+            return self._attr_current_option
+            
         return None
 
     def select_option(self, value: str) -> None:

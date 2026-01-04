@@ -533,7 +533,7 @@ def get_mapping_by_device(device: TuyaBLEDevice) -> list[TuyaBLECategoryNumberMa
         return []
 
 
-class TuyaBLENumber(TuyaBLEEntity, NumberEntity):
+class TuyaBLENumber(TuyaBLEEntity, NumberEntity, RestoreEntity):
     """Representation of a Tuya BLE Number."""
 
     def __init__(
@@ -547,6 +547,21 @@ class TuyaBLENumber(TuyaBLEEntity, NumberEntity):
         super().__init__(hass, coordinator, device, product, mapping.description)
         self._mapping = mapping
         self._attr_mode = mapping.mode
+
+    async def async_added_to_hass(self) -> None:
+        """Handle entity which will be added."""
+        await super().async_added_to_hass()
+
+        if (
+            self._product.lock
+            and self._device.product_id == "rlyxv7pe"
+        ):
+            if (last_state := await self.async_get_last_state()) is not None:
+                if last_state.state != "unknown":
+                    try:
+                        self._attr_native_value = float(last_state.state)
+                    except ValueError:
+                        pass
 
     @property
     def native_value(self) -> float | None:

@@ -15,6 +15,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity import EntityCategory
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
+from homeassistant.helpers.restore_state import RestoreEntity
 
 from .const import DOMAIN
 from .devices import TuyaBLEData, TuyaBLEEntity, TuyaBLEProductInfo
@@ -421,7 +422,7 @@ def get_mapping_by_device(device: TuyaBLEDevice) -> list[TuyaBLECategorySwitchMa
         return []
 
 
-class TuyaBLESwitch(TuyaBLEEntity, SwitchEntity):
+class TuyaBLESwitch(TuyaBLEEntity, SwitchEntity, RestoreEntity):
     """Representation of a Tuya BLE Switch."""
 
     def __init__(
@@ -434,6 +435,20 @@ class TuyaBLESwitch(TuyaBLEEntity, SwitchEntity):
     ) -> None:
         super().__init__(hass, coordinator, device, product, mapping.description)
         self._mapping = mapping
+
+    async def async_added_to_hass(self) -> None:
+        """Handle entity which will be added."""
+        await super().async_added_to_hass()
+
+        if (
+            self._product.lock
+            and self._device.product_id == "rlyxv7pe"
+        ):
+            if (last_state := await self.async_get_last_state()) is not None:
+                if last_state.state == "on":
+                    self._attr_is_on = True
+                elif last_state.state == "off":
+                    self._attr_is_on = False
 
     @property
     def is_on(self) -> bool:

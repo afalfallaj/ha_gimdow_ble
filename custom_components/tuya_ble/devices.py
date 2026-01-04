@@ -20,7 +20,6 @@ from homeassistant.helpers.update_coordinator import (
     CoordinatorEntity,
     DataUpdateCoordinator,
 )
-from homeassistant.helpers.restore_state import RestoreEntity
 
 from home_assistant_bluetooth import BluetoothServiceInfoBleak
 from .tuya_ble import (
@@ -65,7 +64,7 @@ class TuyaBLEProductInfo:
     fingerbot: TuyaBLEFingerbotInfo | None = None
     lock: int | None = None
 
-class TuyaBLEEntity(CoordinatorEntity, RestoreEntity):
+class TuyaBLEEntity(CoordinatorEntity):
     """Tuya BLE base entity."""
 
     def __init__(
@@ -107,41 +106,6 @@ class TuyaBLEEntity(CoordinatorEntity, RestoreEntity):
         ):
              return True
         return self._coordinator.connected
-
-    async def async_added_to_hass(self) -> None:
-        """Handle entity which will be added."""
-        await super().async_added_to_hass()
-
-        # State Restoration for Gimdow (excluding lock entity)
-        if (
-            self._product.lock 
-            and self._device.product_id == "rlyxv7pe"
-            and self.entity_description.key != "lock"
-        ):
-            if (last_state := await self.async_get_last_state()) is not None:
-                # Restore Generic State
-                if hasattr(self, "_attr_native_value"):
-                    # For sensors, try to restore native value
-                    # We might need type conversion based on device class, 
-                    # but for basic preservation string/float is usually handled by HA state machine
-                    # if we don't set it here, the first update might be needed.
-                    # However, since we don't know the exact type expected by the subclass 
-                    # (unless we inspect), we rely on the state string.
-                    # If it's an enum (string), this works. If number, we try cast.
-                    try:
-                         if last_state.state not in ("unknown", "unavailable"):
-                             self._attr_native_value = last_state.state
-                    except ValueError:
-                         pass
-                elif hasattr(self, "_attr_is_on"):
-                    if last_state.state == "on":
-                        self._attr_is_on = True
-                    elif last_state.state == "off":
-                        self._attr_is_on = False
-                
-                # Restore custom attributes if necessary, though HA does this for the state object.
-                # We need the integration's internal state to match so availability logic works.
-                pass
 
     @property
     def device(self) -> TuyaBLEDevice:
