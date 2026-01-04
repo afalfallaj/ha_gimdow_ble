@@ -12,13 +12,15 @@ from enum import IntEnum, StrEnum, Enum
 
 from homeassistant.components.light import (
     ATTR_BRIGHTNESS,
-    ATTR_COLOR_TEMP,
     ATTR_COLOR_TEMP_KELVIN,
     ATTR_HS_COLOR,
     ColorMode,
     LightEntity,
     LightEntityDescription,
 )
+
+# Deprecated in HA Core 2026.1
+ATTR_COLOR_TEMP = "color_temp"
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, callback
