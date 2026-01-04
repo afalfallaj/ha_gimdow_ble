@@ -4,6 +4,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 import logging
+from threading import Timer
 
 from homeassistant.components.lock import (
     LockEntity,
@@ -87,6 +88,21 @@ class TuyaBLELock(TuyaBLEEntity, LockEntity):
     ) -> None:
         super().__init__(hass, coordinator, device, product, mapping.description)
         self._mapping = mapping
+        
+        # Gimdow specific polling
+        if self._device.product_id == "rlyxv7pe":
+            self._poll_thread = Timer(60, self._poll_device)
+            self._poll_thread.start()
+
+    def _poll_device(self):
+        """Send status query to keep connection alive/wake device."""
+        if self.hass.is_stopping:
+            return
+            
+        self.hass.create_task(self._device.update())
+        # Reschedule
+        self._poll_thread = Timer(60, self._poll_device)
+        self._poll_thread.start()
 
     @property
     def is_locked(self) -> bool | None:
