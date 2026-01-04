@@ -13,6 +13,7 @@ from enum import IntEnum, StrEnum, Enum
 from homeassistant.components.light import (
     ATTR_BRIGHTNESS,
     ATTR_COLOR_TEMP,
+    ATTR_COLOR_TEMP_KELVIN,
     ATTR_HS_COLOR,
     ColorMode,
     LightEntity,
@@ -24,6 +25,7 @@ from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.entity import EntityCategory
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
+import homeassistant.util.color as color_util
 
 from .const import (
     DOMAIN,
@@ -612,7 +614,7 @@ class TuyaBLELight(TuyaBLEEntity, LightEntity):
         """Turn on or control the light."""
         commands = [{"code": self.entity_description.key, "value": True}]
 
-        if self._color_temp and ATTR_COLOR_TEMP in kwargs:
+        if self._color_temp and (ATTR_COLOR_TEMP in kwargs or ATTR_COLOR_TEMP_KELVIN in kwargs):
             if self._color_mode_dpcode:
                 commands += [
                     {
@@ -621,12 +623,18 @@ class TuyaBLELight(TuyaBLEEntity, LightEntity):
                     },
                 ]
 
+            if ATTR_COLOR_TEMP_KELVIN in kwargs:
+                # Convert Kelvin to Mireds
+                mireds = color_util.color_temperature_kelvin_to_mired(kwargs[ATTR_COLOR_TEMP_KELVIN])
+            else:
+                mireds = kwargs[ATTR_COLOR_TEMP]
+
             commands += [
                 {
                     "code": self._color_temp.dpcode,
                     "value": round(
                         self._color_temp.remap_value_from(
-                            kwargs[ATTR_COLOR_TEMP],
+                            mireds,
                             self.min_mireds,
                             self.max_mireds,
                             reverse=True,
@@ -641,6 +649,7 @@ class TuyaBLELight(TuyaBLEEntity, LightEntity):
                 ATTR_BRIGHTNESS in kwargs
                 and self.color_mode == ColorMode.HS
                 and ATTR_COLOR_TEMP not in kwargs
+                and ATTR_COLOR_TEMP_KELVIN not in kwargs
             )
         ):
             if self._color_mode_dpcode:
@@ -879,6 +888,8 @@ async def async_setup_entry(
     """Set up the Tuya BLE sensors."""
     data: TuyaBLEData = hass.data[DOMAIN][entry.entry_id]
     descs = get_mapping_by_device(data.device)
+    if not descs:
+        return
     entities: list[TuyaBLELight] = []
 
     for desc in descs:
