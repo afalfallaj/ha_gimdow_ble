@@ -559,7 +559,16 @@ class TuyaBLENumber(TuyaBLEEntity, NumberEntity, RestoreEntity):
             if (last_state := await self.async_get_last_state()) is not None:
                 if last_state.state != "unknown":
                     try:
-                        self._attr_native_value = float(last_state.state)
+                        value = float(last_state.state)
+                        # Calculate raw value based on coefficient to store in device cache
+                        # The property logic divides by coefficient, so we multiply here.
+                        raw_value = int(value * self._mapping.coefficient)
+                        
+                        self._device.datapoints.get_or_create(
+                            self._mapping.dp_id,
+                            TuyaBLEDataPointType.DT_VALUE,
+                            raw_value,
+                        )
                     except ValueError:
                         pass
 

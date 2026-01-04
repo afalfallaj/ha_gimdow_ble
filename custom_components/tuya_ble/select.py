@@ -352,7 +352,27 @@ class TuyaBLESelect(TuyaBLEEntity, SelectEntity, RestoreEntity):
         ):
             if (last_state := await self.async_get_last_state()) is not None:
                 if last_state.state != "unknown":
-                    self._attr_current_option = last_state.state
+                    value = last_state.state
+                    raw_value = None
+                    
+                    # Reverse lookup if value mapping exists
+                    if self._mapping.value_mapping:
+                        for k, v in self._mapping.value_mapping.items():
+                            if v == value:
+                                raw_value = k
+                                break
+                    # Else check if it's an option index
+                    elif value in self._attr_options:
+                        raw_value = self._attr_options.index(value)
+                    
+                    if raw_value is not None:
+                         # Default to DT_ENUM if not specified, assumption based on select usage
+                        dptype = self._mapping.dp_type or TuyaBLEDataPointType.DT_ENUM
+                        self._device.datapoints.get_or_create(
+                            self._mapping.dp_id,
+                            dptype,
+                            raw_value,
+                        )
 
     @property
     def current_option(self) -> str | None:
@@ -369,10 +389,7 @@ class TuyaBLESelect(TuyaBLEEntity, SelectEntity, RestoreEntity):
             else:
                 return value
         
-        # Fallback for restored state
-        if hasattr(self, "_attr_current_option"):
-            return self._attr_current_option
-            
+
         return None
 
     def select_option(self, value: str) -> None:

@@ -445,10 +445,14 @@ class TuyaBLESwitch(TuyaBLEEntity, SwitchEntity, RestoreEntity):
             and self._device.product_id == "rlyxv7pe"
         ):
             if (last_state := await self.async_get_last_state()) is not None:
-                if last_state.state == "on":
-                    self._attr_is_on = True
-                elif last_state.state == "off":
-                    self._attr_is_on = False
+                 if last_state.state in ("on", "off"):
+                    is_on = last_state.state == "on"
+                    # Populate the device cache so the property logic works
+                    self._device.datapoints.get_or_create(
+                        self._mapping.dp_id,
+                        TuyaBLEDataPointType.DT_BOOL,
+                        is_on,
+                    )
 
     @property
     def is_on(self) -> bool:
