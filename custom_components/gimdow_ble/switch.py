@@ -117,10 +117,7 @@ class TuyaBLESwitch(TuyaBLEEntity, SwitchEntity, RestoreEntity):
         """Handle entity which will be added."""
         await super().async_added_to_hass()
 
-        if (
-            self._product.lock
-            and self._device.product_id == "rlyxv7pe"
-        ):
+        if self._product.lock:
             if (last_state := await self.async_get_last_state()) is not None:
                  if last_state.state in ("on", "off"):
                     is_on = last_state.state == "on"

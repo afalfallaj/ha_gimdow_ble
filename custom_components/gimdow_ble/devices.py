@@ -88,12 +88,20 @@ class TuyaBLEEntity(CoordinatorEntity):
         # For Gimdow lock (specifically A1 PRO MAX), non-lock entities (battery, etc.) 
         # should persist state even when disconnected/sleeping.
         # Lock entity itself (DP 47) should show unavailable to avoid false security.
-        if (
+        is_gimdow = (
             self._product.lock 
-            and self._device.product_id == "rlyxv7pe"
             and self.entity_description.key != "lock"
-        ):
+        )
+        if is_gimdow:
              return True
+        
+        # _LOGGER.debug(
+        #     "Entity %s available check: connected=%s, product.lock=%s, product_id=%s", 
+        #     self.entity_id, 
+        #     self._coordinator.connected,
+        #     self._product.lock if self._product else "None",
+        #     self._device.product_id
+        # )
         return self._coordinator.connected
 
     @property

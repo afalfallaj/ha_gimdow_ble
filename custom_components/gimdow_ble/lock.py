@@ -90,7 +90,7 @@ class TuyaBLELock(TuyaBLEEntity, LockEntity):
         self._mapping = mapping
         
         # Gimdow specific polling
-        if self._device.product_id == "rlyxv7pe":
+        if self._product.lock:
             self._poll_thread = Timer(60, self._poll_device)
             self._poll_thread.start()
 
