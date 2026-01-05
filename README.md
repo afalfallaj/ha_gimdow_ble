@@ -37,13 +37,29 @@
 
 ## Setup
 
-Although this integration communicates locally via Bluetooth, it requires **Tuya Cloud** credentials to obtain the initial encryption keys for your device.
+This integration supports two methods for setup: **Automatic (via Tuya Cloud)** and **Manual Entry**.
+
+### Option 1: Automatic (Tuya Cloud)
+Recommended if you don't have your device keys.
 
 1. Go to **Settings > Devices & Services**.
 2. Click **Add Integration** and search for **Gimdow A1 Pro Max BLE**.
-3. Enter your Tuya IoT credentials (Access ID, Access Secret, etc.).
+3. Select **Login via Tuya Cloud**.
+4. Enter your Tuya IoT credentials (Access ID, Access Secret, etc.).
    - *Refer to the [official Tuya integration documentation](https://www.home-assistant.io/integrations/tuya/) for instructions on how to get these credentials.*
-4. Select your Gimdow device from the discovered list.
+5. Select your Gimdow device from the discovered list.
+
+### Option 2: Manual Configuration
+Use this if you already have your device's keys and want to skip the cloud login.
+
+1. Go to **Settings > Devices & Services**.
+2. Click **Add Integration** and search for **Gimdow A1 Pro Max BLE**.
+3. Select **Manual Entry (Advanced)**.
+4. Enter the required device information:
+   - **Device Address** (MAC address)
+   - **UUID**
+   - **Local Key**
+   - **Device ID**
 
 ## Usage
 
@@ -57,6 +73,11 @@ Once added, the following entities will be available:
 
 - **Delay**: Bluetooth Low Energy can have a slight delay. This is normal.
 - **Range**: Ensure your Home Assistant server (or Bluetooth proxy) is within range of the lock.
+
+
+## Disclaimer
+
+This integration is an **unofficial** hobby project and is not affiliated with or supported by Gimdow or Tuya. It is provided "as is" without warranty of any kind.
 
 ---
 *Based on the work of [@airy10](https://github.com/airy10) and [@redphx](https://github.com/redphx).*
