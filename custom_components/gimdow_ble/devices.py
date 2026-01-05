@@ -1,8 +1,8 @@
 """The Gimdow BLE integration."""
 from __future__ import annotations
 from dataclasses import dataclass
+from datetime import timedelta
 from typing import Any
-from threading import Timer
 from .gimdow_ble import GimdowBLEDataPointType
 
 import logging
@@ -126,7 +126,7 @@ class GimdowBLEEntity(CoordinatorEntity):
                     type,
                     value,
                 )
-            self._hass.create_task(datapoint.set_value(value))
+            self._hass.async_create_task(datapoint.set_value(value))
 
     
     def _send_command(self, commands : list[dict[str, Any]]) -> None:
@@ -259,6 +259,7 @@ class GimdowBLECoordinator(DataUpdateCoordinator[GimdowBLEDevice]):
             hass,
             _LOGGER,
             name=DOMAIN,
+            update_interval=timedelta(seconds=60),
         )
         self._device = device
         self._disconnected: bool = True
@@ -278,6 +279,12 @@ class GimdowBLECoordinator(DataUpdateCoordinator[GimdowBLEDevice]):
         if self._disconnected:
             self._disconnected = False
             self.async_update_listeners()
+
+    async def _async_update_data(self) -> GimdowBLEDevice:
+        """Fetch data from the device."""
+        # Polling logic
+        await self._device.update()
+        return self._device
 
     @callback
     def _async_handle_update(self, updates: list[GimdowBLEDataPoint]) -> None:

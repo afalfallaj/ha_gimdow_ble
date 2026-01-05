@@ -1,18 +1,6 @@
 from __future__ import annotations
 
-__version__ = "0.1.0"
-
-
-from .const import (
-    SERVICE_UUID,
-    GimdowBLEDataPointType, 
-)
-from .manager import (
-    AbstaractGimdowBLEDeviceManager,
-    GimdowBLEDeviceCredentials,
-)
-from .gimdow_ble import GimdowBLEDataPoint, GimdowBLEDevice, GimdowBLEEntityDescription
-
+__version__ = "1.0.2"
 
 __all__ = [
     "AbstaractGimdowBLEDeviceManager",

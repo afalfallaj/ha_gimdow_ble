@@ -24,6 +24,15 @@ from homeassistant.const import (
     CONF_COUNTRY_CODE,
     CONF_PASSWORD,
     CONF_USERNAME,
+    CONF_UUID,
+    CONF_LOCAL_KEY,
+    CONF_CATEGORY,
+    CONF_PRODUCT_ID,
+    CONF_DEVICE_NAME,
+    CONF_PRODUCT_MODEL,
+    CONF_PRODUCT_NAME,
+    CONF_FUNCTIONS,
+    CONF_STATUS_RANGE,
 )
 from homeassistant.core import callback
 from homeassistant.data_entry_flow import FlowHandler, FlowResult
@@ -31,18 +40,18 @@ from homeassistant.data_entry_flow import FlowHandler, FlowResult
 from .gimdow_ble import SERVICE_UUID, GimdowBLEDeviceCredentials
 
 from .const import (
-    TUYA_COUNTRIES,
-    TUYA_SMART_APP,
-    SMARTLIFE_APP,
-    TUYA_RESPONSE_SUCCESS,
-    TUYA_RESPONSE_CODE,
-    TUYA_RESPONSE_MSG,
     CONF_ACCESS_ID,
     CONF_ACCESS_SECRET,
     CONF_APP_TYPE,
     CONF_AUTH_TYPE,
     CONF_ENDPOINT,
     DOMAIN,
+    SMARTLIFE_APP,
+    TUYA_COUNTRIES,
+    TUYA_RESPONSE_CODE,
+    TUYA_RESPONSE_MSG,
+    TUYA_RESPONSE_SUCCESS,
+    TUYA_SMART_APP,
 )
 from .devices import GimdowBLEData, get_device_readable_name
 from .cloud import HASSGimdowBLEDeviceManager
@@ -241,9 +250,9 @@ class GimdowBLEConfigFlow(ConfigFlow, domain=DOMAIN):
     ) -> FlowResult:
         """Handle the user step."""
         if self._manager is None:
-            self._manager = HASSGimdowBLEDeviceManager(self.hass, self._data)
+             self._manager = HASSGimdowBLEDeviceManager(self.hass, self._data)
         await self._manager.build_cache()
-        return await self.async_step_login()
+        return self.async_show_menu(step_id="user", menu_options=["login", "manual"])
 
     async def async_step_login(
         self, user_input: dict[str, Any] | None = None
@@ -348,6 +357,75 @@ class GimdowBLEConfigFlow(ConfigFlow, domain=DOMAIN):
                     ),
                 },
             ),
+        )
+
+    async def async_step_manual(
+        self, user_input: dict[str, Any] | None = None
+    ) -> FlowResult:
+        """Handle the manual entry step."""
+        errors: dict[str, str] = {}
+        if user_input is not None:
+             address = user_input[CONF_ADDRESS]
+             await self.async_set_unique_id(address, raise_on_progress=False)
+             self._abort_if_unique_id_configured()
+             
+             # Create credentials dict
+             creds = {
+                 CONF_UUID: user_input[CONF_UUID],
+                 CONF_LOCAL_KEY: user_input[CONF_LOCAL_KEY],
+                 CONF_DEVICE_ID: user_input[CONF_DEVICE_ID],
+                 CONF_DEVICE_NAME: user_input.get(CONF_DEVICE_NAME, "Gimdow Lock"),
+                 CONF_CATEGORY: "jtmspro", # Default to Gimdow category
+                 CONF_PRODUCT_ID: "rlyxv7pe", # Default product id
+                 CONF_PRODUCT_MODEL: "A1 PRO MAX",
+                 CONF_PRODUCT_NAME: "Gimdow Lock",
+                 CONF_FUNCTIONS: [], # Manual entry assumes default functions or None
+                 CONF_STATUS_RANGE: []
+             }
+             
+             # Store in manager's cache effectively simulation a "cloud" device
+             # Or just pass it to options?
+             # The integration uses `HASSGimdowBLEDeviceManager` which mimics Tuya Cloud behavior.
+             # We can just store these in the config entry data options.
+             
+             self._data.update(user_input)
+             # Add credentials to manager data manually so they are saved
+             self._manager.data.update({
+                 f"{address}_credentials": creds
+             })
+
+             return self.async_create_entry(
+                 title=user_input.get(CONF_DEVICE_NAME, "Gimdow Lock"),
+                 data={CONF_ADDRESS: address},
+                 options=self._manager.data,
+             )
+
+        # Populate address list
+        current_addresses = self._async_current_ids()
+        for discovery in async_discovered_service_info(self.hass):
+             if (
+                discovery.address in current_addresses
+                or discovery.address in self._discovered_devices
+                or discovery.service_data is None
+                or not SERVICE_UUID in discovery.service_data.keys()
+            ):
+                continue
+             self._discovered_devices[discovery.address] = discovery
+             
+        addresses = list(self._discovered_devices.keys())
+        # Add any typed in address if previously failed validation etc? No.
+        
+        schema = {
+            vol.Required(CONF_ADDRESS): vol.In(addresses) if addresses else str,
+            vol.Required(CONF_UUID): str,
+            vol.Required(CONF_LOCAL_KEY): str,
+            vol.Required(CONF_DEVICE_ID): str,
+            vol.Optional(CONF_DEVICE_NAME): str,
+        }
+
+        return self.async_show_form(
+            step_id="manual",
+            data_schema=vol.Schema(schema),
             errors=errors,
         )
 

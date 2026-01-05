@@ -2,7 +2,6 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import timedelta
 import logging
 
 from homeassistant.components.lock import (
@@ -89,21 +88,6 @@ class GimdowBLELock(GimdowBLEEntity, LockEntity):
         super().__init__(hass, coordinator, device, product, mapping.description)
         self._mapping = mapping
 
-    async def async_added_to_hass(self) -> None:
-        """Run when entity about to be added to hass."""
-        await super().async_added_to_hass()
-        # Gimdow specific polling
-        if self._product.lock:
-            self.async_on_remove(
-                async_track_time_interval(
-                    self.hass, self._async_poll_device, timedelta(seconds=60)
-                )
-            )
-
-    async def _async_poll_device(self, now=None):
-        """Send status query to keep connection alive/wake device."""
-        # Check if stopping is not needed as async_track_time_interval handles cleanup via async_on_remove
-        await self._device.update()
 
     @property
     def is_locked(self) -> bool | None:

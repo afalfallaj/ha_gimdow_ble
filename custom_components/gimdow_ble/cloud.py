@@ -31,7 +31,6 @@ from tuya_iot import (
 
 from .gimdow_ble import (
     AbstaractGimdowBLEDeviceManager,
-    GimdowBLEDevice,
     GimdowBLEDeviceCredentials,
 )
 

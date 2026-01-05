@@ -37,7 +37,6 @@ from .const import (
 )
 
 from ..const import (
-    DPCode,
     DPType,
 )
 

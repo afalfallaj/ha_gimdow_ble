@@ -25,6 +25,23 @@
           "username": "Tuya Account"
         },
         "description": "This integration requires obtaining an encryption key from the Tuya cloud. This acts as a one-time authorization.\n\nRefer to the official Tuya integration documentation to retrieve your cloud credentials: https://www.home-assistant.io/integrations/tuya/\n\nEnter your Tuya IoT credentials."
+      },
+      "manual": {
+        "title": "Manual Configuration",
+        "description": "Enter the device keys manually if you have them.",
+        "data": {
+          "address": "Device Address",
+          "uuid": "UUID",
+          "local_key": "Local Key",
+          "device_id": "Device ID",
+          "name": "Device Name"
+        }
+      },
+      "user": {
+        "menu_options": {
+          "login": "Login via Tuya Cloud",
+          "manual": "Manual Entry (Advanced)"
+        }
       }
     }
   },

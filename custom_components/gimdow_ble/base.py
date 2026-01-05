@@ -1,11 +1,8 @@
 """Tuya Home Assistant Base Device Model."""
 from __future__ import annotations
 
-import base64
 from dataclasses import dataclass
 import json
-import struct
-from typing import Any, Literal, Self, overload
 
 from tuya_iot import TuyaDevice, TuyaDeviceManager
 

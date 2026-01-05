@@ -31,11 +31,6 @@ from .const import (
     BATTERY_STATE_HIGH,
     BATTERY_STATE_LOW,
     BATTERY_STATE_NORMAL,
-    BATTERY_CHARGED,
-    BATTERY_CHARGING,
-    BATTERY_NOT_CHARGING,
-    CO2_LEVEL_ALARM,
-    CO2_LEVEL_NORMAL,
     DOMAIN,
 )
 from .devices import GimdowBLEData, GimdowBLEEntity, GimdowBLEProductInfo

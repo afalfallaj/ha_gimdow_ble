@@ -1,7 +1,7 @@
 """The Gimdow BLE integration."""
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
 import logging
 
