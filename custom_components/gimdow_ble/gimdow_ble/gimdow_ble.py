@@ -607,7 +607,7 @@ class GimdowBLEDevice:
             )
             return
         self._client = None
-        _LOGGER.warning(
+        _LOGGER.debug(
             "%s: Device unexpectedly disconnected; RSSI: %s",
             self.address,
             self.rssi,
@@ -955,7 +955,7 @@ class GimdowBLEDevice:
             try:
                 await asyncio.wait_for(future, RESPONSE_WAIT_TIMEOUT)
             except asyncio.TimeoutError:
-                _LOGGER.error(
+                _LOGGER.debug(
                     "%s: timeout receiving response, RSSI: %s",
                     self.address,
                     self.rssi,
