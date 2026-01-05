@@ -1,4 +1,4 @@
-"""The Tuya BLE integration."""
+"""The Gimdow BLE integration."""
 from __future__ import annotations
 
 from enum import StrEnum

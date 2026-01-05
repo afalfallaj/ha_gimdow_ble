@@ -5,20 +5,20 @@ __version__ = "0.1.0"
 
 from .const import (
     SERVICE_UUID,
-    TuyaBLEDataPointType, 
+    GimdowBLEDataPointType, 
 )
 from .manager import (
-    AbstaractTuyaBLEDeviceManager,
-    TuyaBLEDeviceCredentials,
+    AbstaractGimdowBLEDeviceManager,
+    GimdowBLEDeviceCredentials,
 )
-from .gimdow_ble import TuyaBLEDataPoint, TuyaBLEDevice, TuyaBLEEntityDescription
+from .gimdow_ble import GimdowBLEDataPoint, GimdowBLEDevice, GimdowBLEEntityDescription
 
 
 __all__ = [
-    "AbstaractTuyaBLEDeviceManager",
-    "TuyaBLEDataPoint",
-    "TuyaBLEDataPointType",
-    "TuyaBLEDevice",
-    "TuyaBLEDeviceCredentials",
+    "AbstaractGimdowBLEDeviceManager",
+    "GimdowBLEDataPoint",
+    "GimdowBLEDataPointType",
+    "GimdowBLEDevice",
+    "GimdowBLEDeviceCredentials",
     "SERVICE_UUID",
 ]

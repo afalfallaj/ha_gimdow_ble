@@ -742,6 +742,8 @@ class GimdowBLEDevice:
                         _LOGGER.error("%s: Sending device info request failed",
                                       self.address, exc_info=True)
                         continue
+                else:
+                    continue
 
                 if self._client and self._client.is_connected:
                     _LOGGER.debug("%s: Sending pairing request", self.address)
@@ -1164,11 +1166,6 @@ class GimdowBLEDevice:
         self, seq_num: int, response_to: int, code: GimdowBLECode, data: bytes
     ) -> None:
         result: int = 0
-        
-        _LOGGER.debug(
-            "%s: Handling command/response code=%s data_len=%s", 
-            self.address, code.name, len(data)
-        )
 
         match code:
             case GimdowBLECode.FUN_SENDER_DEVICE_INFO:
@@ -1187,10 +1184,6 @@ class GimdowBLEDevice:
                 self._session_key = hashlib.md5(
                     self._local_key + srand).digest()
                 self._auth_key = data[14:46]
-                _LOGGER.info(
-                    "%s: Device Info received. Session Key derived successfully.", 
-                    self.address
-                )
 
             case GimdowBLECode.FUN_SENDER_PAIR:
                 if len(data) != 1:
@@ -1203,7 +1196,6 @@ class GimdowBLEDevice:
                     )
                     result = 0
                 self._is_paired = result == 0
-                _LOGGER.info("%s: Pairing Result: %s (Paired=%s)", self.address, result, self._is_paired)
 
             case GimdowBLECode.FUN_SENDER_DEVICE_STATUS:
                 if len(data) != 1:
@@ -1418,7 +1410,7 @@ class GimdowBLEDevice:
 
     async def _send_datapoints(self, datapoint_ids: list[int]) -> None:
         """Send new values of datapoints to the device."""
-        if self._protocol_version in (2, 3):
+        if self._protocol_version == 3:
             await self._send_datapoints_v3(datapoint_ids)
         else:
             raise GimdowBLEDeviceError(0)

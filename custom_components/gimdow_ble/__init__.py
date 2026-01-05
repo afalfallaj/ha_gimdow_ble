@@ -1,4 +1,4 @@
-"""The Tuya BLE integration."""
+"""The Gimdow BLE integration."""
 from __future__ import annotations
 
 import logging
@@ -12,11 +12,11 @@ from homeassistant.const import CONF_ADDRESS, EVENT_HOMEASSISTANT_STOP, Platform
 from homeassistant.core import Event, HomeAssistant, callback
 from homeassistant.exceptions import ConfigEntryNotReady
 
-from .gimdow_ble import TuyaBLEDevice
+from .gimdow_ble import GimdowBLEDevice
 
-from .cloud import HASSTuyaBLEDeviceManager
+from .cloud import HASSGimdowBLEDeviceManager
 from .const import DOMAIN
-from .devices import TuyaBLECoordinator, TuyaBLEData, get_device_product_info
+from .devices import GimdowBLECoordinator, GimdowBLEData, get_device_product_info
 
 PLATFORMS: list[Platform] = [
     Platform.BUTTON,
@@ -31,28 +31,28 @@ _LOGGER = logging.getLogger(__name__)
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
-    """Set up Tuya BLE from a config entry."""
+    """Set up Gimdow BLE from a config entry."""
     address: str = entry.data[CONF_ADDRESS]
     ble_device = bluetooth.async_ble_device_from_address(
         hass, address.upper(), True
     ) or await get_device(address)
     if not ble_device:
         raise ConfigEntryNotReady(
-            f"Could not find Tuya BLE device with address {address}"
+            f"Could not find Gimdow BLE device with address {address}"
         )
-    manager = HASSTuyaBLEDeviceManager(hass, entry.options.copy())
-    device = TuyaBLEDevice(manager, ble_device)
+    manager = HASSGimdowBLEDeviceManager(hass, entry.options.copy())
+    device = GimdowBLEDevice(manager, ble_device)
     await device.initialize()
     product_info = get_device_product_info(device)
 
-    coordinator = TuyaBLECoordinator(hass, device)
+    coordinator = GimdowBLECoordinator(hass, device)
 
     '''
     try:
         await device.update()
     except BLEAK_EXCEPTIONS as ex:
         raise ConfigEntryNotReady(
-            f"Could not communicate with Tuya BLE device with address {address}"
+            f"Could not communicate with Gimdow BLE device with address {address}"
         ) from ex
     '''
     hass.add_job(device.update())
@@ -76,7 +76,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         )
     )
 
-    hass.data.setdefault(DOMAIN, {})[entry.entry_id] = TuyaBLEData(
+    hass.data.setdefault(DOMAIN, {})[entry.entry_id] = GimdowBLEData(
         entry.title,
         device,
         product_info,
@@ -99,7 +99,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
 async def _async_update_listener(hass: HomeAssistant, entry: ConfigEntry) -> None:
     """Handle options update."""
-    data: TuyaBLEData = hass.data[DOMAIN][entry.entry_id]
+    data: GimdowBLEData = hass.data[DOMAIN][entry.entry_id]
     if entry.title != data.title:
         await hass.config_entries.async_reload(entry.entry_id)
 
@@ -107,7 +107,7 @@ async def _async_update_listener(hass: HomeAssistant, entry: ConfigEntry) -> Non
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Unload a config entry."""
     if unload_ok := await hass.config_entries.async_unload_platforms(entry, PLATFORMS):
-        data: TuyaBLEData = hass.data[DOMAIN].pop(entry.entry_id)
+        data: GimdowBLEData = hass.data[DOMAIN].pop(entry.entry_id)
         await data.device.stop()
 
     return unload_ok

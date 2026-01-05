@@ -1,4 +1,4 @@
-"""The Tuya BLE integration."""
+"""The Gimdow BLE integration."""
 from __future__ import annotations
 
 from dataclasses import dataclass, field
@@ -17,37 +17,37 @@ from homeassistant.helpers.entity import EntityCategory
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
 
 from .const import DOMAIN
-from .devices import TuyaBLEData, TuyaBLEEntity, TuyaBLEProductInfo
-from .gimdow_ble import TuyaBLEDataPointType, TuyaBLEDevice
+from .devices import GimdowBLEData, GimdowBLEEntity, GimdowBLEProductInfo
+from .gimdow_ble import GimdowBLEDataPointType, GimdowBLEDevice
 
 _LOGGER = logging.getLogger(__name__)
 
 
-TuyaBLEButtonIsAvailable = Callable[["TuyaBLEButton", TuyaBLEProductInfo], bool] | None
+GimdowBLEButtonIsAvailable = Callable[["GimdowBLEButton", GimdowBLEProductInfo], bool] | None
 
 
 @dataclass
-class TuyaBLEButtonMapping:
+class GimdowBLEButtonMapping:
     dp_id: int
     description: ButtonEntityDescription
     force_add: bool = True
-    dp_type: TuyaBLEDataPointType | None = None
-    is_available: TuyaBLEButtonIsAvailable = None
+    dp_type: GimdowBLEDataPointType | None = None
+    is_available: GimdowBLEButtonIsAvailable = None
     value: Any | None = None
 
 
 @dataclass
-class TuyaBLECategoryButtonMapping:
-    products: dict[str, list[TuyaBLEButtonMapping]] | None = None
-    mapping: list[TuyaBLEButtonMapping] | None = None
+class GimdowBLECategoryButtonMapping:
+    products: dict[str, list[GimdowBLEButtonMapping]] | None = None
+    mapping: list[GimdowBLEButtonMapping] | None = None
 
 
-mapping: dict[str, TuyaBLECategoryButtonMapping] = {
-    "jtmspro": TuyaBLECategoryButtonMapping(
+mapping: dict[str, GimdowBLECategoryButtonMapping] = {
+    "jtmspro": GimdowBLECategoryButtonMapping(
         products={
             "rlyxv7pe":  # Gimdow
             [
-                TuyaBLEButtonMapping(
+                GimdowBLEButtonMapping(
                     dp_id=44,
                     description=ButtonEntityDescription(
                         key="sync_clock",
@@ -55,7 +55,7 @@ mapping: dict[str, TuyaBLECategoryButtonMapping] = {
                         entity_category=EntityCategory.CONFIG,
                     ),
                 ),
-                TuyaBLEButtonMapping(
+                GimdowBLEButtonMapping(
                     dp_id=68,
                     description=ButtonEntityDescription(
                         key="recalibrate",
@@ -63,9 +63,9 @@ mapping: dict[str, TuyaBLECategoryButtonMapping] = {
                         entity_category=EntityCategory.CONFIG,
                     ),
                     value=0,
-                    dp_type=TuyaBLEDataPointType.DT_ENUM,
+                    dp_type=GimdowBLEDataPointType.DT_ENUM,
                 ),
-                TuyaBLEButtonMapping(
+                GimdowBLEButtonMapping(
                     dp_id=68,
                     description=ButtonEntityDescription(
                         key="unlock_more",
@@ -73,9 +73,9 @@ mapping: dict[str, TuyaBLECategoryButtonMapping] = {
                         entity_category=EntityCategory.CONFIG,
                     ),
                     value=1,
-                    dp_type=TuyaBLEDataPointType.DT_ENUM,
+                    dp_type=GimdowBLEDataPointType.DT_ENUM,
                 ),
-                TuyaBLEButtonMapping(
+                GimdowBLEButtonMapping(
                     dp_id=68,
                     description=ButtonEntityDescription(
                         key="keep_retracted",
@@ -83,9 +83,9 @@ mapping: dict[str, TuyaBLECategoryButtonMapping] = {
                         entity_category=EntityCategory.CONFIG,
                     ),
                     value=2,
-                    dp_type=TuyaBLEDataPointType.DT_ENUM,
+                    dp_type=GimdowBLEDataPointType.DT_ENUM,
                 ),
-                TuyaBLEButtonMapping(
+                GimdowBLEButtonMapping(
                     dp_id=68,
                     description=ButtonEntityDescription(
                         key="add_force",
@@ -93,7 +93,7 @@ mapping: dict[str, TuyaBLECategoryButtonMapping] = {
                         entity_category=EntityCategory.CONFIG,
                     ),
                     value=3,
-                    dp_type=TuyaBLEDataPointType.DT_ENUM,
+                    dp_type=GimdowBLEDataPointType.DT_ENUM,
                 ),
             ],
 
@@ -102,7 +102,7 @@ mapping: dict[str, TuyaBLECategoryButtonMapping] = {
 }
 
 
-def get_mapping_by_device(device: TuyaBLEDevice) -> list[TuyaBLECategoryButtonMapping]:
+def get_mapping_by_device(device: GimdowBLEDevice) -> list[GimdowBLECategoryButtonMapping]:
     category = mapping.get(device.category)
     if category is not None and category.products is not None:
         product_mapping = category.products.get(device.product_id)
@@ -116,27 +116,27 @@ def get_mapping_by_device(device: TuyaBLEDevice) -> list[TuyaBLECategoryButtonMa
         return []
 
 
-class TuyaBLEButton(TuyaBLEEntity, ButtonEntity):
-    """Representation of a Tuya BLE Button."""
+class GimdowBLEButton(GimdowBLEEntity, ButtonEntity):
+    """Representation of a Gimdow BLE Button."""
 
     def __init__(
         self,
         hass: HomeAssistant,
         coordinator: DataUpdateCoordinator,
-        device: TuyaBLEDevice,
-        product: TuyaBLEProductInfo,
-        mapping: TuyaBLEButtonMapping,
+        device: GimdowBLEDevice,
+        product: GimdowBLEProductInfo,
+        mapping: GimdowBLEButtonMapping,
     ) -> None:
         super().__init__(hass, coordinator, device, product, mapping.description)
         self._mapping = mapping
 
     def press(self) -> None:
         """Press the button."""
-        dptype = self._mapping.dp_type or TuyaBLEDataPointType.DT_BOOL
+        dptype = self._mapping.dp_type or GimdowBLEDataPointType.DT_BOOL
         datapoint = self._device.datapoints.get_or_create(
             self._mapping.dp_id,
             dptype,
-            False if dptype == TuyaBLEDataPointType.DT_BOOL else 0,
+            False if dptype == GimdowBLEDataPointType.DT_BOOL else 0,
         )
         if datapoint:
             if self._mapping.value is not None:
@@ -161,16 +161,16 @@ async def async_setup_entry(
     entry: ConfigEntry,
     async_add_entities: AddEntitiesCallback,
 ) -> None:
-    """Set up the Tuya BLE sensors."""
-    data: TuyaBLEData = hass.data[DOMAIN][entry.entry_id]
+    """Set up the Gimdow BLE sensors."""
+    data: GimdowBLEData = hass.data[DOMAIN][entry.entry_id]
     mappings = get_mapping_by_device(data.device)
-    entities: list[TuyaBLEButton] = []
+    entities: list[GimdowBLEButton] = []
     for mapping in mappings:
         if mapping.force_add or data.device.datapoints.has_id(
             mapping.dp_id, mapping.dp_type
         ):
             entities.append(
-                TuyaBLEButton(
+                GimdowBLEButton(
                     hass,
                     data.coordinator,
                     data.device,

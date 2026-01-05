@@ -1,4 +1,4 @@
-"""Config flow for Tuya BLE integration."""
+"""Config flow for Gimdow BLE integration."""
 
 from __future__ import annotations
 
@@ -28,7 +28,7 @@ from homeassistant.const import (
 from homeassistant.core import callback
 from homeassistant.data_entry_flow import FlowHandler, FlowResult
 
-from .gimdow_ble import SERVICE_UUID, TuyaBLEDeviceCredentials
+from .gimdow_ble import SERVICE_UUID, GimdowBLEDeviceCredentials
 
 from .const import (
     TUYA_COUNTRIES,
@@ -44,14 +44,14 @@ from .const import (
     CONF_ENDPOINT,
     DOMAIN,
 )
-from .devices import TuyaBLEData, get_device_readable_name
-from .cloud import HASSTuyaBLEDeviceManager
+from .devices import GimdowBLEData, get_device_readable_name
+from .cloud import HASSGimdowBLEDeviceManager
 
 _LOGGER = logging.getLogger(__name__)
 
 
 async def _try_login(
-    manager: HASSTuyaBLEDeviceManager,
+    manager: HASSGimdowBLEDeviceManager,
     user_input: dict[str, Any],
     errors: dict[str, str],
     placeholders: dict[str, Any],
@@ -151,8 +151,8 @@ def _show_login_form(
     )
 
 
-class TuyaBLEOptionsFlow(OptionsFlowWithConfigEntry):
-    """Handle a Tuya BLE options flow."""
+class GimdowBLEOptionsFlow(OptionsFlowWithConfigEntry):
+    """Handle a Gimdow BLE options flow."""
 
     def __init__(self, config_entry: ConfigEntry) -> None:
         """Initialize options flow."""
@@ -170,11 +170,11 @@ class TuyaBLEOptionsFlow(OptionsFlowWithConfigEntry):
         """Handle the Tuya IOT platform login step."""
         errors: dict[str, str] = {}
         placeholders: dict[str, Any] = {}
-        credentials: TuyaBLEDeviceCredentials | None = None
+        credentials: GimdowBLEDeviceCredentials | None = None
         address: str | None = self.config_entry.data.get(CONF_ADDRESS)
 
         if user_input is not None:
-            entry: TuyaBLEData | None = None
+            entry: GimdowBLEData | None = None
             domain_data = self.hass.data.get(DOMAIN)
             if domain_data:
                 entry = domain_data.get(self.config_entry.entry_id)
@@ -204,8 +204,8 @@ class TuyaBLEOptionsFlow(OptionsFlowWithConfigEntry):
         return _show_login_form(self, user_input, errors, placeholders)
 
 
-class TuyaBLEConfigFlow(ConfigFlow, domain=DOMAIN):
-    """Handle a config flow for Tuya BLE."""
+class GimdowBLEConfigFlow(ConfigFlow, domain=DOMAIN):
+    """Handle a config flow for Gimdow BLE."""
 
     VERSION = 1
 
@@ -215,7 +215,7 @@ class TuyaBLEConfigFlow(ConfigFlow, domain=DOMAIN):
         self._discovery_info: BluetoothServiceInfoBleak | None = None
         self._discovered_devices: dict[str, BluetoothServiceInfoBleak] = {}
         self._data: dict[str, Any] = {}
-        self._manager: HASSTuyaBLEDeviceManager | None = None
+        self._manager: HASSGimdowBLEDeviceManager | None = None
         self._get_device_info_error = False
 
     async def async_step_bluetooth(
@@ -226,7 +226,7 @@ class TuyaBLEConfigFlow(ConfigFlow, domain=DOMAIN):
         self._abort_if_unique_id_configured()
         self._discovery_info = discovery_info
         if self._manager is None:
-            self._manager = HASSTuyaBLEDeviceManager(self.hass, self._data)
+            self._manager = HASSGimdowBLEDeviceManager(self.hass, self._data)
         await self._manager.build_cache()
         self.context["title_placeholders"] = {
             "name": await get_device_readable_name(
@@ -241,7 +241,7 @@ class TuyaBLEConfigFlow(ConfigFlow, domain=DOMAIN):
     ) -> FlowResult:
         """Handle the user step."""
         if self._manager is None:
-            self._manager = HASSTuyaBLEDeviceManager(self.hass, self._data)
+            self._manager = HASSGimdowBLEDeviceManager(self.hass, self._data)
         await self._manager.build_cache()
         return await self.async_step_login()
 
@@ -355,6 +355,6 @@ class TuyaBLEConfigFlow(ConfigFlow, domain=DOMAIN):
     @callback
     def async_get_options_flow(
         config_entry: ConfigEntry,
-    ) -> TuyaBLEOptionsFlow:
+    ) -> GimdowBLEOptionsFlow:
         """Get the options flow for this handler."""
-        return TuyaBLEOptionsFlow(config_entry)
+        return GimdowBLEOptionsFlow(config_entry)

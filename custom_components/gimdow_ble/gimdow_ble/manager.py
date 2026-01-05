@@ -4,7 +4,7 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass
 
 @dataclass
-class TuyaBLEDeviceCredentials:
+class GimdowBLEDeviceCredentials:
     uuid: str
     local_key: str
     device_id: str
@@ -38,8 +38,8 @@ class TuyaBLEDeviceCredentials:
             self.status_range,
         )
 
-class AbstaractTuyaBLEDeviceManager(ABC):
-    """Abstaract manager of the Tuya BLE devices credentials."""
+class AbstaractGimdowBLEDeviceManager(ABC):
+    """Abstaract manager of the Gimdow BLE devices credentials."""
 
     @abstractmethod
     async def get_device_credentials(
@@ -47,8 +47,8 @@ class AbstaractTuyaBLEDeviceManager(ABC):
         address: str,
         force_update: bool = False,
         save_data: bool = False,
-    ) -> TuyaBLEDeviceCredentials | None:
-        """Get credentials of the Tuya BLE device."""
+    ) -> GimdowBLEDeviceCredentials | None:
+        """Get credentials of the Gimdow BLE device."""
         pass
 
     @classmethod
@@ -64,8 +64,8 @@ class AbstaractTuyaBLEDeviceManager(ABC):
         product_name: str | None,
         functions: List | None,
         status_range: List | None,
-    ) -> TuyaBLEDeviceCredentials | None:
-        """Checks and creates credentials of the Tuya BLE device."""
+    ) -> GimdowBLEDeviceCredentials | None:
+        """Checks and creates credentials of the Gimdow BLE device."""
         if (
             uuid and 
             local_key and 
@@ -73,7 +73,7 @@ class AbstaractTuyaBLEDeviceManager(ABC):
             category and
             product_id
         ):
-            return TuyaBLEDeviceCredentials(
+            return GimdowBLEDeviceCredentials(
                 uuid,
                 local_key,
                 device_id,

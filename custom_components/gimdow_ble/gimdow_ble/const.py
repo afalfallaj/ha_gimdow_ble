@@ -15,7 +15,7 @@ MANUFACTURER_DATA_ID = 0x07D0
 
 RESPONSE_WAIT_TIMEOUT = 60
 
-class TuyaBLECode(Enum):
+class GimdowBLECode(Enum):
     FUN_SENDER_DEVICE_INFO = 0x0000
     FUN_SENDER_PAIR = 0x0001
     FUN_SENDER_DPS = 0x0002
@@ -44,7 +44,7 @@ class TuyaBLECode(Enum):
     FUN_RECEIVE_TIME2_REQ = 0x8012
 
 
-class TuyaBLEDataPointType(Enum):
+class GimdowBLEDataPointType(Enum):
     DT_RAW = 0
     DT_BOOL = 1
     DT_VALUE = 2

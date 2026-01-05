@@ -1,4 +1,4 @@
-"""The Tuya BLE integration."""
+"""The Gimdow BLE integration."""
 from __future__ import annotations
 
 import logging
@@ -30,9 +30,9 @@ from tuya_iot import (
 )
 
 from .gimdow_ble import (
-    AbstaractTuyaBLEDeviceManager,
-    TuyaBLEDevice,
-    TuyaBLEDeviceCredentials,
+    AbstaractGimdowBLEDeviceManager,
+    GimdowBLEDevice,
+    GimdowBLEDeviceCredentials,
 )
 
 from .const import (
@@ -95,8 +95,8 @@ CONF_TUYA_DEVICE_KEYS = [
 _cache: dict[str, TuyaCloudCacheItem] = {}
 
 
-class HASSTuyaBLEDeviceManager(AbstaractTuyaBLEDeviceManager):
-    """Cloud connected manager of the Tuya BLE devices credentials."""
+class HASSGimdowBLEDeviceManager(AbstaractGimdowBLEDeviceManager):
+    """Cloud connected manager of the Gimdow BLE devices credentials."""
 
     def __init__(self, hass: HomeAssistant, data: dict[str, Any]) -> None:
         assert hass is not None
@@ -258,12 +258,12 @@ class HASSTuyaBLEDeviceManager(AbstaractTuyaBLEDeviceManager):
         address: str,
         force_update: bool = False,
         save_data: bool = False,
-    ) -> TuyaBLEDeviceCredentials | None:
-        """Get credentials of the Tuya BLE device."""
+    ) -> GimdowBLEDeviceCredentials | None:
+        """Get credentials of the Gimdow BLE device."""
         global _cache
         item: TuyaCloudCacheItem | None = None
         credentials: dict[str, any] | None = None
-        result: TuyaBLEDeviceCredentials | None = None
+        result: GimdowBLEDeviceCredentials | None = None
 
         if not force_update and self._has_credentials(self._data):
             credentials = self._data.copy()
@@ -289,7 +289,7 @@ class HASSTuyaBLEDeviceManager(AbstaractTuyaBLEDeviceManager):
                 credentials = item.credentials.get(address)
 
         if credentials:
-            result = TuyaBLEDeviceCredentials(
+            result = GimdowBLEDeviceCredentials(
                 credentials.get(CONF_UUID, ""),
                 credentials.get(CONF_LOCAL_KEY, ""),
                 credentials.get(CONF_DEVICE_ID, ""),

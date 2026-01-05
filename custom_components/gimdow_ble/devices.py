@@ -1,9 +1,9 @@
-"""The Tuya BLE integration."""
+"""The Gimdow BLE integration."""
 from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 from threading import Timer
-from .gimdow_ble import TuyaBLEDataPointType
+from .gimdow_ble import GimdowBLEDataPointType
 
 import logging
 from homeassistant.const import CONF_ADDRESS, CONF_DEVICE_ID
@@ -23,13 +23,13 @@ from homeassistant.helpers.update_coordinator import (
 
 from home_assistant_bluetooth import BluetoothServiceInfoBleak
 from .gimdow_ble import (
-    AbstaractTuyaBLEDeviceManager,
-    TuyaBLEDataPoint,
-    TuyaBLEDevice,
-    TuyaBLEDeviceCredentials,
+    AbstaractGimdowBLEDeviceManager,
+    GimdowBLEDataPoint,
+    GimdowBLEDevice,
+    GimdowBLEDeviceCredentials,
 )
 
-from .cloud import HASSTuyaBLEDeviceManager
+from .cloud import HASSGimdowBLEDeviceManager
 from .const import (
     DEVICE_DEF_MANUFACTURER,
     DOMAIN,
@@ -39,7 +39,7 @@ from .const import (
 )
 
 from .base import IntegerTypeData, EnumTypeData
-from .gimdow_ble import TuyaBLEDataPointType, TuyaBLEDevice
+from .gimdow_ble import GimdowBLEDataPointType, GimdowBLEDevice
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -48,20 +48,20 @@ _LOGGER = logging.getLogger(__name__)
 
 
 @dataclass
-class TuyaBLEProductInfo:
+class GimdowBLEProductInfo:
     name: str
     manufacturer: str = DEVICE_DEF_MANUFACTURER
     lock: int | None = None
 
-class TuyaBLEEntity(CoordinatorEntity):
-    """Tuya BLE base entity."""
+class GimdowBLEEntity(CoordinatorEntity):
+    """Gimdow BLE base entity."""
 
     def __init__(
         self,
         hass: HomeAssistant,
-        coordinator: TuyaBLECoordinator,
-        device: TuyaBLEDevice,
-        product: TuyaBLEProductInfo,
+        coordinator: GimdowBLECoordinator,
+        device: GimdowBLEDevice,
+        product: GimdowBLEProductInfo,
         description: EntityDescription,
     ) -> None:
         super().__init__(coordinator)
@@ -105,7 +105,7 @@ class TuyaBLEEntity(CoordinatorEntity):
         return self._coordinator.connected
 
     @property
-    def device(self) -> TuyaBLEDevice:
+    def device(self) -> GimdowBLEDevice:
         """Return the associated BLE Device."""
         return self._device
 
@@ -116,7 +116,7 @@ class TuyaBLEEntity(CoordinatorEntity):
 
     def send_dp_value(self,
         key: DPCode | None,
-        type: TuyaBLEDataPointType,
+        type: GimdowBLEDataPointType,
         value: bytes | bool | int | str | None = None) -> None:
 
         dpid = self.find_dpid(key)
@@ -140,7 +140,7 @@ class TuyaBLEEntity(CoordinatorEntity):
                 if isinstance(value, str):
                     # We suppose here that cloud JSON type are sent as string
                     if dttype == DPType.STRING or dttype == DPType.JSON:
-                        self.send_dp_value(code, TuyaBLEDataPointType.DT_STRING, value)
+                        self.send_dp_value(code, GimdowBLEDataPointType.DT_STRING, value)
                     elif dttype == DPType.ENUM:
                         int_value = 0
                         values = self.device.function[code].values
@@ -148,12 +148,12 @@ class TuyaBLEEntity(CoordinatorEntity):
                             range = self.device.function[code].values.get("range")
                             if isinstance(range, list):
                                 int_value = range.index(value) if value in range else None
-                        self.send_dp_value(code, TuyaBLEDataPointType.DT_ENUM, int_value)
+                        self.send_dp_value(code, GimdowBLEDataPointType.DT_ENUM, int_value)
 
                 elif isinstance(value, bool):
-                    self.send_dp_value(code, TuyaBLEDataPointType.DT_BOOL, value)
+                    self.send_dp_value(code, GimdowBLEDataPointType.DT_BOOL, value)
                 else:
-                    self.send_dp_value(code, TuyaBLEDataPointType.DT_VALUE, value)
+                    self.send_dp_value(code, GimdowBLEDataPointType.DT_VALUE, value)
 
 
     def find_dpid(
@@ -250,10 +250,10 @@ class TuyaBLEEntity(CoordinatorEntity):
 
 
 
-class TuyaBLECoordinator(DataUpdateCoordinator[None]):
-    """Data coordinator for receiving Tuya BLE updates."""
+class GimdowBLECoordinator(DataUpdateCoordinator[None]):
+    """Data coordinator for receiving Gimdow BLE updates."""
 
-    def __init__(self, hass: HomeAssistant, device: TuyaBLEDevice) -> None:
+    def __init__(self, hass: HomeAssistant, device: GimdowBLEDevice) -> None:
         """Initialise the coordinator."""
         super().__init__(
             hass,
@@ -280,7 +280,7 @@ class TuyaBLECoordinator(DataUpdateCoordinator[None]):
             self.async_update_listeners()
 
     @callback
-    def _async_handle_update(self, updates: list[TuyaBLEDataPoint]) -> None:
+    def _async_handle_update(self, updates: list[GimdowBLEDataPoint]) -> None:
         """Just trigger the callbacks."""
         self._async_handle_connect()
         self.async_set_updated_data(None)
@@ -303,27 +303,27 @@ class TuyaBLECoordinator(DataUpdateCoordinator[None]):
 
 
 @dataclass
-class TuyaBLEData:
-    """Data for the Tuya BLE integration."""
+class GimdowBLEData:
+    """Data for the Gimdow BLE integration."""
 
     title: str
-    device: TuyaBLEDevice
-    product: TuyaBLEProductInfo
-    manager: HASSTuyaBLEDeviceManager
-    coordinator: TuyaBLECoordinator
+    device: GimdowBLEDevice
+    product: GimdowBLEProductInfo
+    manager: HASSGimdowBLEDeviceManager
+    coordinator: GimdowBLECoordinator
 
 
 @dataclass
-class TuyaBLECategoryInfo:
-    products: dict[str, TuyaBLEProductInfo]
-    info: TuyaBLEProductInfo | None = None
+class GimdowBLECategoryInfo:
+    products: dict[str, GimdowBLEProductInfo]
+    info: GimdowBLEProductInfo | None = None
 
 
-devices_database: dict[str, TuyaBLECategoryInfo] = {
-    "jtmspro": TuyaBLECategoryInfo(
+devices_database: dict[str, GimdowBLECategoryInfo] = {
+    "jtmspro": GimdowBLECategoryInfo(
         products={
             "rlyxv7pe":  # Gimdow device product_id
-            TuyaBLEProductInfo(
+            GimdowBLEProductInfo(
                 name="A1 PRO MAX",
                 # Gimdow identity
                 lock=1,
@@ -334,7 +334,7 @@ devices_database: dict[str, TuyaBLECategoryInfo] = {
 
 def get_product_info_by_ids(
     category: str, product_id: str
-) -> TuyaBLEProductInfo | None:
+) -> GimdowBLEProductInfo | None:
     category_info = devices_database.get(category)
     if category_info is not None:
         product_info = category_info.products.get(product_id)
@@ -345,7 +345,7 @@ def get_product_info_by_ids(
         return None
 
 
-def get_device_product_info(device: TuyaBLEDevice) -> TuyaBLEProductInfo | None:
+def get_device_product_info(device: GimdowBLEDevice) -> GimdowBLEProductInfo | None:
     return get_product_info_by_ids(device.category, device.product_id)
 
 
@@ -356,10 +356,10 @@ def get_short_address(address: str) -> str:
 
 async def get_device_readable_name(
     discovery_info: BluetoothServiceInfoBleak,
-    manager: AbstaractTuyaBLEDeviceManager | None,
+    manager: AbstaractGimdowBLEDeviceManager | None,
 ) -> str:
-    credentials: TuyaBLEDeviceCredentials | None = None
-    product_info: TuyaBLEProductInfo | None = None
+    credentials: GimdowBLEDeviceCredentials | None = None
+    product_info: GimdowBLEProductInfo | None = None
     if manager:
         credentials = await manager.get_device_credentials(discovery_info.address)
         if credentials:
@@ -375,7 +375,7 @@ async def get_device_readable_name(
     return "%s %s" % (discovery_info.device.name, short_address)
 
 
-def get_device_info(device: TuyaBLEDevice) -> DeviceInfo | None:
+def get_device_info(device: GimdowBLEDevice) -> DeviceInfo | None:
     product_info = None
     if device.category and device.product_id:
         product_info = get_product_info_by_ids(device.category, device.product_id)

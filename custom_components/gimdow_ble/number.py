@@ -1,4 +1,4 @@
-"""The Tuya BLE integration."""
+"""The Gimdow BLE integration."""
 from __future__ import annotations
 
 from dataclasses import dataclass, field
@@ -26,36 +26,36 @@ from homeassistant.helpers.restore_state import RestoreEntity
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
 
 from .const import DOMAIN
-from .devices import TuyaBLEData, TuyaBLEEntity, TuyaBLEProductInfo
-from .gimdow_ble import TuyaBLEDataPointType, TuyaBLEDevice
+from .devices import GimdowBLEData, GimdowBLEEntity, GimdowBLEProductInfo
+from .gimdow_ble import GimdowBLEDataPointType, GimdowBLEDevice
 
 _LOGGER = logging.getLogger(__name__)
 
-TuyaBLENumberGetter = (
-    Callable[["TuyaBLENumber", TuyaBLEProductInfo], float | None] | None
+GimdowBLENumberGetter = (
+    Callable[["GimdowBLENumber", GimdowBLEProductInfo], float | None] | None
 )
 
 
-TuyaBLENumberIsAvailable = (
-    Callable[["TuyaBLENumber", TuyaBLEProductInfo], bool] | None
+GimdowBLENumberIsAvailable = (
+    Callable[["GimdowBLENumber", GimdowBLEProductInfo], bool] | None
 )
 
 
-TuyaBLENumberSetter = (
-    Callable[["TuyaBLENumber", TuyaBLEProductInfo, float], None] | None
+GimdowBLENumberSetter = (
+    Callable[["GimdowBLENumber", GimdowBLEProductInfo, float], None] | None
 )
 
 
 @dataclass
-class TuyaBLENumberMapping:
+class GimdowBLENumberMapping:
     dp_id: int
     description: NumberEntityDescription
     force_add: bool = True
-    dp_type: TuyaBLEDataPointType | None = None
+    dp_type: GimdowBLEDataPointType | None = None
     coefficient: float = 1.0
-    is_available: TuyaBLENumberIsAvailable = None
-    getter: TuyaBLENumberGetter = None
-    setter: TuyaBLENumberSetter = None
+    is_available: GimdowBLENumberIsAvailable = None
+    getter: GimdowBLENumberGetter = None
+    setter: GimdowBLENumberSetter = None
     mode: NumberMode = NumberMode.BOX
 
 
@@ -63,16 +63,16 @@ class TuyaBLENumberMapping:
 
 
 @dataclass
-class TuyaBLECategoryNumberMapping:
-    products: dict[str, list[TuyaBLENumberMapping]] | None = None
-    mapping: list[TuyaBLENumberMapping] | None = None
+class GimdowBLECategoryNumberMapping:
+    products: dict[str, list[GimdowBLENumberMapping]] | None = None
+    mapping: list[GimdowBLENumberMapping] | None = None
 
 
-mapping: dict[str, TuyaBLECategoryNumberMapping] = {
-    "jtmspro": TuyaBLECategoryNumberMapping(
+mapping: dict[str, GimdowBLECategoryNumberMapping] = {
+    "jtmspro": GimdowBLECategoryNumberMapping(
         products={
             "rlyxv7pe": [  # Gimdow
-                TuyaBLENumberMapping(
+                GimdowBLENumberMapping(
                     dp_id=36,
                     description=NumberEntityDescription(
                         key="auto_lock_time",
@@ -90,7 +90,7 @@ mapping: dict[str, TuyaBLECategoryNumberMapping] = {
 }
 
 
-def get_mapping_by_device(device: TuyaBLEDevice) -> list[TuyaBLECategoryNumberMapping]:
+def get_mapping_by_device(device: GimdowBLEDevice) -> list[GimdowBLECategoryNumberMapping]:
     category = mapping.get(device.category)
     if category is not None and category.products is not None:
         product_mapping = category.products.get(device.product_id)
@@ -104,16 +104,16 @@ def get_mapping_by_device(device: TuyaBLEDevice) -> list[TuyaBLECategoryNumberMa
         return []
 
 
-class TuyaBLENumber(TuyaBLEEntity, NumberEntity, RestoreEntity):
-    """Representation of a Tuya BLE Number."""
+class GimdowBLENumber(GimdowBLEEntity, NumberEntity, RestoreEntity):
+    """Representation of a Gimdow BLE Number."""
 
     def __init__(
         self,
         hass: HomeAssistant,
         coordinator: DataUpdateCoordinator,
-        device: TuyaBLEDevice,
-        product: TuyaBLEProductInfo,
-        mapping: TuyaBLENumberMapping,
+        device: GimdowBLEDevice,
+        product: GimdowBLEProductInfo,
+        mapping: GimdowBLENumberMapping,
     ) -> None:
         super().__init__(hass, coordinator, device, product, mapping.description)
         self._mapping = mapping
@@ -134,7 +134,7 @@ class TuyaBLENumber(TuyaBLEEntity, NumberEntity, RestoreEntity):
                         
                         self._device.datapoints.get_or_create(
                             self._mapping.dp_id,
-                            TuyaBLEDataPointType.DT_VALUE,
+                            GimdowBLEDataPointType.DT_VALUE,
                             raw_value,
                         )
                     except ValueError:
@@ -160,7 +160,7 @@ class TuyaBLENumber(TuyaBLEEntity, NumberEntity, RestoreEntity):
         int_value = int(value * self._mapping.coefficient)
         datapoint = self._device.datapoints.get_or_create(
             self._mapping.dp_id,
-            TuyaBLEDataPointType.DT_VALUE,
+            GimdowBLEDataPointType.DT_VALUE,
             int(int_value),
         )
         if datapoint:
@@ -180,16 +180,16 @@ async def async_setup_entry(
     entry: ConfigEntry,
     async_add_entities: AddEntitiesCallback,
 ) -> None:
-    """Set up the Tuya BLE sensors."""
-    data: TuyaBLEData = hass.data[DOMAIN][entry.entry_id]
+    """Set up the Gimdow BLE sensors."""
+    data: GimdowBLEData = hass.data[DOMAIN][entry.entry_id]
     mappings = get_mapping_by_device(data.device)
-    entities: list[TuyaBLENumber] = []
+    entities: list[GimdowBLENumber] = []
     for mapping in mappings:
         if mapping.force_add or data.device.datapoints.has_id(
             mapping.dp_id, mapping.dp_type
         ):
             entities.append(
-                TuyaBLENumber(
+                GimdowBLENumber(
                     hass,
                     data.coordinator,
                     data.device,

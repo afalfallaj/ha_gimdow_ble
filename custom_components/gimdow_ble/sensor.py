@@ -1,4 +1,4 @@
-"""The Tuya BLE integration."""
+"""The Gimdow BLE integration."""
 from __future__ import annotations
 
 from dataclasses import dataclass, field
@@ -38,31 +38,31 @@ from .const import (
     CO2_LEVEL_NORMAL,
     DOMAIN,
 )
-from .devices import TuyaBLEData, TuyaBLEEntity, TuyaBLEProductInfo
-from .gimdow_ble import TuyaBLEDataPointType, TuyaBLEDevice
+from .devices import GimdowBLEData, GimdowBLEEntity, GimdowBLEProductInfo
+from .gimdow_ble import GimdowBLEDataPointType, GimdowBLEDevice
 
 _LOGGER = logging.getLogger(__name__)
 
 SIGNAL_STRENGTH_DP_ID = -1
 
 
-TuyaBLESensorIsAvailable = Callable[["TuyaBLESensor", TuyaBLEProductInfo], bool] | None
+GimdowBLESensorIsAvailable = Callable[["GimdowBLESensor", GimdowBLEProductInfo], bool] | None
 
 
 @dataclass
-class TuyaBLESensorMapping:
+class GimdowBLESensorMapping:
     dp_id: int
     description: SensorEntityDescription
     force_add: bool = True
-    dp_type: TuyaBLEDataPointType | None = None
-    getter: Callable[[TuyaBLESensor], None] | None = None
+    dp_type: GimdowBLEDataPointType | None = None
+    getter: Callable[[GimdowBLESensor], None] | None = None
     coefficient: float = 1.0
     icons: list[str] | None = None
-    is_available: TuyaBLESensorIsAvailable = None
+    is_available: GimdowBLESensorIsAvailable = None
 
 
 @dataclass
-class TuyaBLEBatteryMapping(TuyaBLESensorMapping):
+class GimdowBLEBatteryMapping(GimdowBLESensorMapping):
     description: SensorEntityDescription = field(
         default_factory=lambda: SensorEntityDescription(
             key="battery",
@@ -75,7 +75,7 @@ class TuyaBLEBatteryMapping(TuyaBLESensorMapping):
 
 
 @dataclass
-class TuyaBLETemperatureMapping(TuyaBLESensorMapping):
+class GimdowBLETemperatureMapping(GimdowBLESensorMapping):
     description: SensorEntityDescription = field(
         default_factory=lambda: SensorEntityDescription(
             key="temperature",
@@ -86,7 +86,7 @@ class TuyaBLETemperatureMapping(TuyaBLESensorMapping):
     )
 
 
-def is_co2_alarm_enabled(self: TuyaBLESensor, product: TuyaBLEProductInfo) -> bool:
+def is_co2_alarm_enabled(self: GimdowBLESensor, product: GimdowBLEProductInfo) -> bool:
     result: bool = True
     datapoint = self._device.datapoints[13]
     if datapoint:
@@ -94,24 +94,24 @@ def is_co2_alarm_enabled(self: TuyaBLESensor, product: TuyaBLEProductInfo) -> bo
     return result
 
 
-def battery_enum_getter(self: TuyaBLESensor) -> None:
+def battery_enum_getter(self: GimdowBLESensor) -> None:
     datapoint = self._device.datapoints[104]
     if datapoint:
         self._attr_native_value = datapoint.value * 20.0
 
 
 @dataclass
-class TuyaBLECategorySensorMapping:
-    products: dict[str, list[TuyaBLESensorMapping]] | None = None
-    mapping: list[TuyaBLESensorMapping] | None = None
+class GimdowBLECategorySensorMapping:
+    products: dict[str, list[GimdowBLESensorMapping]] | None = None
+    mapping: list[GimdowBLESensorMapping] | None = None
 
 
-mapping: dict[str, TuyaBLECategorySensorMapping] = {
-    "jtmspro": TuyaBLECategorySensorMapping(
+mapping: dict[str, GimdowBLECategorySensorMapping] = {
+    "jtmspro": GimdowBLECategorySensorMapping(
         products={
             "rlyxv7pe":  # Smart Lock
             [
-                TuyaBLESensorMapping(
+                GimdowBLESensorMapping(
                     dp_id=9,
                     description=SensorEntityDescription(
                         key="battery_state",
@@ -137,11 +137,11 @@ mapping: dict[str, TuyaBLECategorySensorMapping] = {
 }
 
 
-def rssi_getter(sensor: TuyaBLESensor) -> None:
+def rssi_getter(sensor: GimdowBLESensor) -> None:
     sensor._attr_native_value = sensor._device.rssi
 
 
-rssi_mapping = TuyaBLESensorMapping(
+rssi_mapping = GimdowBLESensorMapping(
     dp_id=SIGNAL_STRENGTH_DP_ID,
     description=SensorEntityDescription(
         key="signal_strength",
@@ -155,7 +155,7 @@ rssi_mapping = TuyaBLESensorMapping(
 )
 
 
-def get_mapping_by_device(device: TuyaBLEDevice) -> list[TuyaBLESensorMapping]:
+def get_mapping_by_device(device: GimdowBLEDevice) -> list[GimdowBLESensorMapping]:
     category = mapping.get(device.category)
     if category is not None and category.products is not None:
         product_mapping = category.products.get(device.product_id)
@@ -169,16 +169,16 @@ def get_mapping_by_device(device: TuyaBLEDevice) -> list[TuyaBLESensorMapping]:
         return []
 
 
-class TuyaBLESensor(TuyaBLEEntity, SensorEntity, RestoreEntity):
-    """Representation of a Tuya BLE sensor."""
+class GimdowBLESensor(GimdowBLEEntity, SensorEntity, RestoreEntity):
+    """Representation of a Gimdow BLE sensor."""
 
     def __init__(
         self,
         hass: HomeAssistant,
         coordinator: DataUpdateCoordinator,
-        device: TuyaBLEDevice,
-        product: TuyaBLEProductInfo,
-        mapping: TuyaBLESensorMapping,
+        device: GimdowBLEDevice,
+        product: GimdowBLEProductInfo,
+        mapping: GimdowBLESensorMapping,
     ) -> None:
         super().__init__(hass, coordinator, device, product, mapping.description)
         self._mapping = mapping
@@ -200,7 +200,7 @@ class TuyaBLESensor(TuyaBLEEntity, SensorEntity, RestoreEntity):
         else:
             datapoint = self._device.datapoints[self._mapping.dp_id]
             if datapoint:
-                if datapoint.type == TuyaBLEDataPointType.DT_ENUM:
+                if datapoint.type == GimdowBLEDataPointType.DT_ENUM:
                     if self.entity_description.options is not None:
                         if datapoint.value >= 0 and datapoint.value < len(
                             self.entity_description.options
@@ -215,7 +215,7 @@ class TuyaBLESensor(TuyaBLEEntity, SensorEntity, RestoreEntity):
                             self._mapping.icons
                         ):
                             self._attr_icon = self._mapping.icons[datapoint.value]
-                elif datapoint.type == TuyaBLEDataPointType.DT_VALUE:
+                elif datapoint.type == GimdowBLEDataPointType.DT_VALUE:
                     self._attr_native_value = (
                         datapoint.value / self._mapping.coefficient
                     )
@@ -237,11 +237,11 @@ async def async_setup_entry(
     entry: ConfigEntry,
     async_add_entities: AddEntitiesCallback,
 ) -> None:
-    """Set up the Tuya BLE sensors."""
-    data: TuyaBLEData = hass.data[DOMAIN][entry.entry_id]
+    """Set up the Gimdow BLE sensors."""
+    data: GimdowBLEData = hass.data[DOMAIN][entry.entry_id]
     mappings = get_mapping_by_device(data.device)
-    entities: list[TuyaBLESensor] = [
-        TuyaBLESensor(
+    entities: list[GimdowBLESensor] = [
+        GimdowBLESensor(
             hass,
             data.coordinator,
             data.device,
@@ -254,7 +254,7 @@ async def async_setup_entry(
             mapping.dp_id, mapping.dp_type
         ):
             entities.append(
-                TuyaBLESensor(
+                GimdowBLESensor(
                     hass,
                     data.coordinator,
                     data.device,

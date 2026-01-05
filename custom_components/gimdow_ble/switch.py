@@ -1,4 +1,4 @@
-"""The Tuya BLE integration."""
+"""The Gimdow BLE integration."""
 from __future__ import annotations
 
 from dataclasses import dataclass, field
@@ -18,53 +18,53 @@ from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
 from homeassistant.helpers.restore_state import RestoreEntity
 
 from .const import DOMAIN
-from .devices import TuyaBLEData, TuyaBLEEntity, TuyaBLEProductInfo
-from .gimdow_ble import TuyaBLEDataPointType, TuyaBLEDevice
+from .devices import GimdowBLEData, GimdowBLEEntity, GimdowBLEProductInfo
+from .gimdow_ble import GimdowBLEDataPointType, GimdowBLEDevice
 
 _LOGGER = logging.getLogger(__name__)
 
 
-TuyaBLESwitchGetter = (
-    Callable[["TuyaBLESwitch", TuyaBLEProductInfo], bool | None] | None
+GimdowBLESwitchGetter = (
+    Callable[["GimdowBLESwitch", GimdowBLEProductInfo], bool | None] | None
 )
 
 
-TuyaBLESwitchIsAvailable = (
-    Callable[["TuyaBLESwitch", TuyaBLEProductInfo], bool] | None
+GimdowBLESwitchIsAvailable = (
+    Callable[["GimdowBLESwitch", GimdowBLEProductInfo], bool] | None
 )
 
 
-TuyaBLESwitchSetter = (
-    Callable[["TuyaBLESwitch", TuyaBLEProductInfo, bool], None] | None
+GimdowBLESwitchSetter = (
+    Callable[["GimdowBLESwitch", GimdowBLEProductInfo, bool], None] | None
 )
 
 
 @dataclass
-class TuyaBLESwitchMapping:
+class GimdowBLESwitchMapping:
     dp_id: int
     description: SwitchEntityDescription
     force_add: bool = True
-    dp_type: TuyaBLEDataPointType | None = None
+    dp_type: GimdowBLEDataPointType | None = None
     bitmap_mask: bytes | None = None
-    is_available: TuyaBLESwitchIsAvailable = None
-    getter: TuyaBLESwitchGetter = None
-    setter: TuyaBLESwitchSetter = None
+    is_available: GimdowBLESwitchIsAvailable = None
+    getter: GimdowBLESwitchGetter = None
+    setter: GimdowBLESwitchSetter = None
 
 
 
 
 
 @dataclass
-class TuyaBLECategorySwitchMapping:
-    products: dict[str, list[TuyaBLESwitchMapping]] | None = None
-    mapping: list[TuyaBLESwitchMapping] | None = None
+class GimdowBLECategorySwitchMapping:
+    products: dict[str, list[GimdowBLESwitchMapping]] | None = None
+    mapping: list[GimdowBLESwitchMapping] | None = None
 
 
-mapping: dict[str, TuyaBLECategorySwitchMapping] = {
-    "jtmspro": TuyaBLECategorySwitchMapping(
+mapping: dict[str, GimdowBLECategorySwitchMapping] = {
+    "jtmspro": GimdowBLECategorySwitchMapping(
         products={
             "rlyxv7pe": [  # Gimdow
-                TuyaBLESwitchMapping(
+                GimdowBLESwitchMapping(
                     dp_id=33,
                     description=SwitchEntityDescription(
                         key="auto_lock",
@@ -72,7 +72,7 @@ mapping: dict[str, TuyaBLECategorySwitchMapping] = {
                         entity_category=EntityCategory.CONFIG,
                     ),
                 ),
-                TuyaBLESwitchMapping(
+                GimdowBLESwitchMapping(
                     dp_id=78,
                     description=SwitchEntityDescription(
                         key="change_direction",
@@ -85,7 +85,7 @@ mapping: dict[str, TuyaBLECategorySwitchMapping] = {
 }
 
 
-def get_mapping_by_device(device: TuyaBLEDevice) -> list[TuyaBLECategorySwitchMapping]:
+def get_mapping_by_device(device: GimdowBLEDevice) -> list[GimdowBLECategorySwitchMapping]:
     category = mapping.get(device.category)
     if category is not None and category.products is not None:
         product_mapping = category.products.get(device.product_id)
@@ -99,16 +99,16 @@ def get_mapping_by_device(device: TuyaBLEDevice) -> list[TuyaBLECategorySwitchMa
         return []
 
 
-class TuyaBLESwitch(TuyaBLEEntity, SwitchEntity, RestoreEntity):
-    """Representation of a Tuya BLE Switch."""
+class GimdowBLESwitch(GimdowBLEEntity, SwitchEntity, RestoreEntity):
+    """Representation of a Gimdow BLE Switch."""
 
     def __init__(
         self,
         hass: HomeAssistant,
         coordinator: DataUpdateCoordinator,
-        device: TuyaBLEDevice,
-        product: TuyaBLEProductInfo,
-        mapping: TuyaBLESwitchMapping,
+        device: GimdowBLEDevice,
+        product: GimdowBLEProductInfo,
+        mapping: GimdowBLESwitchMapping,
     ) -> None:
         super().__init__(hass, coordinator, device, product, mapping.description)
         self._mapping = mapping
@@ -124,7 +124,7 @@ class TuyaBLESwitch(TuyaBLEEntity, SwitchEntity, RestoreEntity):
                     # Populate the device cache so the property logic works
                     self._device.datapoints.get_or_create(
                         self._mapping.dp_id,
-                        TuyaBLEDataPointType.DT_BOOL,
+                        GimdowBLEDataPointType.DT_BOOL,
                         is_on,
                     )
 
@@ -139,7 +139,7 @@ class TuyaBLESwitch(TuyaBLEEntity, SwitchEntity, RestoreEntity):
         if datapoint:
             if (
                 datapoint.type
-                in [TuyaBLEDataPointType.DT_RAW, TuyaBLEDataPointType.DT_BITMAP]
+                in [GimdowBLEDataPointType.DT_RAW, GimdowBLEDataPointType.DT_BITMAP]
                 and self._mapping.bitmap_mask
             ):
                 bitmap_value = bytes(datapoint.value)
@@ -160,7 +160,7 @@ class TuyaBLESwitch(TuyaBLEEntity, SwitchEntity, RestoreEntity):
         if self._mapping.bitmap_mask:
             datapoint = self._device.datapoints.get_or_create(
                 self._mapping.dp_id,
-                TuyaBLEDataPointType.DT_BITMAP,
+                GimdowBLEDataPointType.DT_BITMAP,
                 self._mapping.bitmap_mask,
             )
             bitmap_mask = self._mapping.bitmap_mask
@@ -171,7 +171,7 @@ class TuyaBLESwitch(TuyaBLEEntity, SwitchEntity, RestoreEntity):
         else:
             datapoint = self._device.datapoints.get_or_create(
                 self._mapping.dp_id,
-                TuyaBLEDataPointType.DT_BOOL,
+                GimdowBLEDataPointType.DT_BOOL,
                 True,
             )
             new_value = True
@@ -187,7 +187,7 @@ class TuyaBLESwitch(TuyaBLEEntity, SwitchEntity, RestoreEntity):
         if self._mapping.bitmap_mask:
             datapoint = self._device.datapoints.get_or_create(
                 self._mapping.dp_id,
-                TuyaBLEDataPointType.DT_BITMAP,
+                GimdowBLEDataPointType.DT_BITMAP,
                 self._mapping.bitmap_mask,
             )
             bitmap_mask = self._mapping.bitmap_mask
@@ -198,7 +198,7 @@ class TuyaBLESwitch(TuyaBLEEntity, SwitchEntity, RestoreEntity):
         else:
             datapoint = self._device.datapoints.get_or_create(
                 self._mapping.dp_id,
-                TuyaBLEDataPointType.DT_BOOL,
+                GimdowBLEDataPointType.DT_BOOL,
                 False,
             )
             new_value = False
@@ -219,16 +219,16 @@ async def async_setup_entry(
     entry: ConfigEntry,
     async_add_entities: AddEntitiesCallback,
 ) -> None:
-    """Set up the Tuya BLE sensors."""
-    data: TuyaBLEData = hass.data[DOMAIN][entry.entry_id]
+    """Set up the Gimdow BLE sensors."""
+    data: GimdowBLEData = hass.data[DOMAIN][entry.entry_id]
     mappings = get_mapping_by_device(data.device)
-    entities: list[TuyaBLESwitch] = []
+    entities: list[GimdowBLESwitch] = []
     for mapping in mappings:
         if mapping.force_add or data.device.datapoints.has_id(
             mapping.dp_id, mapping.dp_type
         ):
             entities.append(
-                TuyaBLESwitch(
+                GimdowBLESwitch(
                     hass,
                     data.coordinator,
                     data.device,

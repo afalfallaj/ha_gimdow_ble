@@ -1,4 +1,4 @@
-"""The Tuya BLE integration."""
+"""The Gimdow BLE integration."""
 from __future__ import annotations
 
 from dataclasses import dataclass, field
@@ -19,18 +19,18 @@ from homeassistant.helpers.restore_state import RestoreEntity
 
 
 from .const import DOMAIN
-from .devices import TuyaBLEData, TuyaBLEEntity, TuyaBLEProductInfo
-from .gimdow_ble import TuyaBLEDataPointType, TuyaBLEDevice
+from .devices import GimdowBLEData, GimdowBLEEntity, GimdowBLEProductInfo
+from .gimdow_ble import GimdowBLEDataPointType, GimdowBLEDevice
 
 _LOGGER = logging.getLogger(__name__)
 
 
 @dataclass
-class TuyaBLESelectMapping:
+class GimdowBLESelectMapping:
     dp_id: int
     description: SelectEntityDescription
     force_add: bool = True
-    dp_type: TuyaBLEDataPointType | None = None
+    dp_type: GimdowBLEDataPointType | None = None
     value_mapping: dict[str, str] | None = None
 
 
@@ -45,17 +45,17 @@ class TemperatureUnitDescription(SelectEntityDescription):
 
 
 @dataclass
-class TuyaBLECategorySelectMapping:
-    products: dict[str, list[TuyaBLESelectMapping]] | None = None
-    mapping: list[TuyaBLESelectMapping] | None = None
+class GimdowBLECategorySelectMapping:
+    products: dict[str, list[GimdowBLESelectMapping]] | None = None
+    mapping: list[GimdowBLESelectMapping] | None = None
 
 
-mapping: dict[str, TuyaBLECategorySelectMapping] = {
-    "jtmspro": TuyaBLECategorySelectMapping(
+mapping: dict[str, GimdowBLECategorySelectMapping] = {
+    "jtmspro": GimdowBLECategorySelectMapping(
         products={
             "rlyxv7pe":  # Smart Lock
             [
-                TuyaBLESelectMapping(
+                GimdowBLESelectMapping(
                     dp_id=31,
                     description=SelectEntityDescription(
                         key="beep_volume",
@@ -75,8 +75,8 @@ mapping: dict[str, TuyaBLECategorySelectMapping] = {
 
 
 def get_mapping_by_device(
-    device: TuyaBLEDevice
-) -> list[TuyaBLECategorySelectMapping]:
+    device: GimdowBLEDevice
+) -> list[GimdowBLECategorySelectMapping]:
     category = mapping.get(device.category)
     if category is not None and category.products is not None:
         product_mapping = category.products.get(device.product_id)
@@ -90,16 +90,16 @@ def get_mapping_by_device(
         return []
 
 
-class TuyaBLESelect(TuyaBLEEntity, SelectEntity, RestoreEntity):
-    """Representation of a Tuya BLE select."""
+class GimdowBLESelect(GimdowBLEEntity, SelectEntity, RestoreEntity):
+    """Representation of a Gimdow BLE select."""
 
     def __init__(
         self,
         hass: HomeAssistant,
         coordinator: DataUpdateCoordinator,
-        device: TuyaBLEDevice,
-        product: TuyaBLEProductInfo,
-        mapping: TuyaBLESelectMapping,
+        device: GimdowBLEDevice,
+        product: GimdowBLEProductInfo,
+        mapping: GimdowBLESelectMapping,
     ) -> None:
         super().__init__(
             hass,
@@ -133,7 +133,7 @@ class TuyaBLESelect(TuyaBLEEntity, SelectEntity, RestoreEntity):
                     
                     if raw_value is not None:
                          # Default to DT_ENUM if not specified, assumption based on select usage
-                        dptype = self._mapping.dp_type or TuyaBLEDataPointType.DT_ENUM
+                        dptype = self._mapping.dp_type or GimdowBLEDataPointType.DT_ENUM
                         self._device.datapoints.get_or_create(
                             self._mapping.dp_id,
                             dptype,
@@ -168,7 +168,7 @@ class TuyaBLESelect(TuyaBLEEntity, SelectEntity, RestoreEntity):
                 )
                 if key:
                      # For string/enum mapped values, we send the key (e.g. "function1")
-                    dptype = self._mapping.dp_type or TuyaBLEDataPointType.DT_STRING
+                    dptype = self._mapping.dp_type or GimdowBLEDataPointType.DT_STRING
                     datapoint = self._device.datapoints.get_or_create(
                         self._mapping.dp_id,
                         dptype,
@@ -180,7 +180,7 @@ class TuyaBLESelect(TuyaBLEEntity, SelectEntity, RestoreEntity):
                 int_value = self._attr_options.index(value)
                 datapoint = self._device.datapoints.get_or_create(
                     self._mapping.dp_id,
-                    TuyaBLEDataPointType.DT_ENUM,
+                    GimdowBLEDataPointType.DT_ENUM,
                     int_value,
                 )
                 if datapoint:
@@ -192,16 +192,16 @@ async def async_setup_entry(
     entry: ConfigEntry,
     async_add_entities: AddEntitiesCallback,
 ) -> None:
-    """Set up the Tuya BLE sensors."""
-    data: TuyaBLEData = hass.data[DOMAIN][entry.entry_id]
+    """Set up the Gimdow BLE sensors."""
+    data: GimdowBLEData = hass.data[DOMAIN][entry.entry_id]
     mappings = get_mapping_by_device(data.device)
-    entities: list[TuyaBLESelect] = []
+    entities: list[GimdowBLESelect] = []
     for mapping in mappings:
         if (
             mapping.force_add or
             data.device.datapoints.has_id(mapping.dp_id, mapping.dp_type)
         ):
-            entities.append(TuyaBLESelect(
+            entities.append(GimdowBLESelect(
                 hass,
                 data.coordinator,
                 data.device,
