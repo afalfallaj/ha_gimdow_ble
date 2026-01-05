@@ -250,7 +250,7 @@ class GimdowBLEEntity(CoordinatorEntity):
 
 
 
-class GimdowBLECoordinator(DataUpdateCoordinator[None]):
+class GimdowBLECoordinator(DataUpdateCoordinator[GimdowBLEDevice]):
     """Data coordinator for receiving Gimdow BLE updates."""
 
     def __init__(self, hass: HomeAssistant, device: GimdowBLEDevice) -> None:
@@ -283,7 +283,7 @@ class GimdowBLECoordinator(DataUpdateCoordinator[None]):
     def _async_handle_update(self, updates: list[GimdowBLEDataPoint]) -> None:
         """Just trigger the callbacks."""
         self._async_handle_connect()
-        self.async_set_updated_data(None)
+        self.async_set_updated_data(self._device)
 
     @callback
     def _set_disconnected(self, _: None) -> None:

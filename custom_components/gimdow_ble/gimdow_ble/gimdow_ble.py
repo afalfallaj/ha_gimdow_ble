@@ -664,121 +664,108 @@ class GimdowBLEDevice:
             await asyncio.sleep(0.01)
             if self._client and self._client.is_connected and self._is_paired:
                 return
-            attempts_count = 100
-            while attempts_count > 0:
-                attempts_count -= 1
-                if attempts_count == 0:
-                    _LOGGER.error(
-                        "%s: Connecting, all attempts failed; RSSI: %s",
-                        self.address,
-                        self.rssi,
-                    )
-                    raise BleakNotFoundError()
-                try:
-                    async with global_connect_lock:
-                        _LOGGER.debug(
-                            "%s: Connecting; RSSI: %s", self.address, self.rssi
-                        )
-                        client = await establish_connection(
-                            BleakClientWithServiceCache,
-                            self._ble_device,
-                            self.address,
-                            self._disconnected,
-                            use_services_cache=True,
-                            ble_device_callback=lambda: self._ble_device,
-                        )
-                except BleakNotFoundError:
-                    _LOGGER.error(
-                        "%s: device not found, not in range, or poor RSSI: %s",
-                        self.address,
-                        self.rssi,
-                        exc_info=True,
-                    )
-                    continue
-                except BLEAK_EXCEPTIONS:
-                    _LOGGER.error(
-                        "%s: communication failed", self.address, exc_info=True
-                    )
-                    continue
-                except:
-                    _LOGGER.error("%s: unexpected error",
-                                  self.address, exc_info=True)
-                    continue
 
-                if client and client.is_connected:
-                    _LOGGER.debug("%s: Connected; RSSI: %s",
-                                  self.address, self.rssi)
-                    self._client = client
-                    try:
-                        await self._client.start_notify(
-                            CHARACTERISTIC_NOTIFY, self._notification_handler
-                        )
-                    except:  # [BLEAK_EXCEPTIONS, BleakNotFoundError]:
-                        self._client = None
-                        _LOGGER.error("%s: starting notifications failed",
-                                      self.address, exc_info=True)
-                        continue
-                else:
-                    continue
-
-                if self._client and self._client.is_connected:
+            try:
+                async with global_connect_lock:
                     _LOGGER.debug(
-                        "%s: Sending device info request", self.address)
-                    try:
-                        if not await self._send_packet_while_connected(
-                            GimdowBLECode.FUN_SENDER_DEVICE_INFO,
-                            bytes(0),
-                            0,
-                            True,
-                        ):
-                            self._client = None
-                            _LOGGER.error(
-                                "%s: Sending device info request failed",
-                                self.address,
-                            )
-                            continue
-                    except:  # [BLEAK_EXCEPTIONS, BleakNotFoundError]:
-                        self._client = None
-                        _LOGGER.error("%s: Sending device info request failed",
-                                      self.address, exc_info=True)
-                        continue
+                        "%s: Connecting; RSSI: %s", self.address, self.rssi
+                    )
+                    client = await establish_connection(
+                        BleakClientWithServiceCache,
+                        self._ble_device,
+                        self.address,
+                        self._disconnected,
+                        use_services_cache=True,
+                        ble_device_callback=lambda: self._ble_device,
+                    )
+            except BLEAK_EXCEPTIONS as ex:
+                _LOGGER.debug(
+                    "%s: communication failed: %s", self.address, ex
+                )
+                return # Let the loop/caller handle retry if needed, or just fail this attempt
+            except Exception as ex:
+                _LOGGER.error("%s: unexpected error: %s",
+                                self.address, ex, exc_info=True)
+                return
 
-                if self._client and self._client.is_connected:
-                    _LOGGER.debug("%s: Sending pairing request", self.address)
-                    try:
-                        if not await self._send_packet_while_connected(
-                            GimdowBLECode.FUN_SENDER_PAIR,
-                            self._build_pairing_request(),
-                            0,
-                            True,
-                        ):
-                            self._client = None
-                            _LOGGER.error(
-                                "%s: Sending pairing request failed",
-                                self.address,
-                            )
-                            continue
-                    except:  # [BLEAK_EXCEPTIONS, BleakNotFoundError]:
-                        self._client = None
-                        _LOGGER.error("%s: Sending pairing request failed",
-                                      self.address, exc_info=True)
-                        continue
-                else:
-                    continue
-
-                break
-
-        if self._client:
-            if self._client.is_connected:
-                if self._is_paired:
-                    _LOGGER.debug("%s: Successfully connected", self.address)
-                    self._fire_connected_callbacks()
-                else:
-                    _LOGGER.error("%s: Connected but not paired", self.address)
+            if client and client.is_connected:
+                _LOGGER.debug("%s: Connected; RSSI: %s",
+                                self.address, self.rssi)
+                self._client = client
+                try:
+                    await self._client.start_notify(
+                        CHARACTERISTIC_NOTIFY, self._notification_handler
+                    )
+                except Exception as ex:
+                    self._client = None
+                    _LOGGER.error("%s: starting notifications failed: %s",
+                                    self.address, ex, exc_info=True)
+                    await client.disconnect() 
+                    return
             else:
-                _LOGGER.error("%s: Not connected", self.address)
-        else:
-            _LOGGER.error("%s: No client device", self.address)
+                 _LOGGER.debug("%s: Failed to connect", self.address)
+                 return
+
+            # Connection established, now perform handshake
+            if self._client and self._client.is_connected:
+                _LOGGER.debug(
+                    "%s: Sending device info request", self.address)
+                try:
+                    if not await self._send_packet_while_connected(
+                        GimdowBLECode.FUN_SENDER_DEVICE_INFO,
+                        bytes(0),
+                        0,
+                        True,
+                    ):
+                        self._client = None
+                        _LOGGER.error(
+                            "%s: Sending device info request failed",
+                            self.address,
+                        )
+                        await client.disconnect()
+                        return
+                except Exception as ex:  
+                    self._client = None
+                    _LOGGER.error("%s: Sending device info request failed: %s",
+                                    self.address, ex, exc_info=True)
+                    await client.disconnect()
+                    return
+
+            if self._client and self._client.is_connected:
+                _LOGGER.debug("%s: Sending pairing request", self.address)
+                try:
+                    if not await self._send_packet_while_connected(
+                        GimdowBLECode.FUN_SENDER_PAIR,
+                        self._build_pairing_request(),
+                        0,
+                        True,
+                    ):
+                        self._client = None
+                        _LOGGER.error(
+                            "%s: Sending pairing request failed",
+                            self.address,
+                        )
+                        await client.disconnect()
+                        return
+                except Exception as ex:
+                    self._client = None
+                    _LOGGER.error("%s: Sending pairing request failed: %s",
+                                    self.address, ex, exc_info=True)
+                    await client.disconnect()
+                    return
+
+            if self._client:
+                if self._client.is_connected:
+                    if self._is_paired:
+                        _LOGGER.debug("%s: Successfully connected", self.address)
+                        self._fire_connected_callbacks()
+                    else:
+                        _LOGGER.error("%s: Connected but not paired", self.address)
+                        # Optionally disconnect here if pairing failed?
+                else:
+                    _LOGGER.error("%s: Not connected after handshake attempts", self.address)
+            else:
+                _LOGGER.error("%s: No client device after handshake attempts", self.address)
 
     async def _reconnect(self) -> None:
         """Attempt a reconnect"""
@@ -915,6 +902,9 @@ class GimdowBLEDevice:
             return
         await self._ensure_connected()
         if self._expected_disconnect:
+            return
+        if not (self._client and self._client.is_connected):
+            _LOGGER.debug("%s: Not connected, skipping send packet", self.address)
             return
         await self._send_packet_while_connected(code, data, 0, wait_for_response)
 

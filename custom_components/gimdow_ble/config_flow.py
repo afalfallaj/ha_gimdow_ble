@@ -117,7 +117,7 @@ def _show_login_form(
         def_country = pycountry.countries.get(alpha_2=flow.hass.config.country)
         if def_country:
             def_country_name = def_country.name
-    except:
+    except Exception:
         pass
 
     return flow.async_show_form(
