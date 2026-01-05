@@ -24,6 +24,8 @@
 
 ## Installation
 
+[![Open your Home Assistant instance and open a repository inside the Home Assistant Community Store.](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=afalfallaj&repository=ha_gimdow_ble&category=integration)
+
 ### Option 1: HACS (Recommended)
 1. Add this repository to HACS as a custom repository.
 2. Search for "Gimdow A1 Pro Max BLE" and install.

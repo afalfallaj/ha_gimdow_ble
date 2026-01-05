@@ -7,11 +7,13 @@
       "service_data_uuid": "0000a201-0000-1000-8000-00805f9b34fb"
     }
   ],
-  "codeowners": ["@airy10"],
+  "codeowners": [
+    "@afalfallaj"
+  ],
   "config_flow": true,
   "dependencies": ["bluetooth_adapters", "tuya"],
   "documentation": "https://www.home-assistant.io/integrations/gimdow_ble",
   "requirements": ["tuya-iot-py-sdk==0.6.6", "pycountry>=22.3.5"],
   "iot_class": "local_push",
-  "version": "0.2.0"
+  "version": "1.0.0"
 }
