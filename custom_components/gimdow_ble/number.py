@@ -152,7 +152,7 @@ class GimdowBLENumber(GimdowBLEEntity, NumberEntity, RestoreEntity):
 
         return self._mapping.description.native_min_value
 
-    def set_native_value(self, value: float) -> None:
+    async def async_set_native_value(self, value: float) -> None:
         """Set new value."""
         if self._mapping.setter:
             self._mapping.setter(self, self._product, value)
@@ -164,7 +164,7 @@ class GimdowBLENumber(GimdowBLEEntity, NumberEntity, RestoreEntity):
             int(int_value),
         )
         if datapoint:
-            self._hass.create_task(datapoint.set_value(int_value))
+            await datapoint.set_value(int_value)
 
     @property
     def available(self) -> bool:

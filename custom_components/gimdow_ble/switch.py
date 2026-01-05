@@ -151,7 +151,7 @@ class GimdowBLESwitch(GimdowBLEEntity, SwitchEntity, RestoreEntity):
                 return bool(datapoint.value)
         return False
 
-    def turn_on(self, **kwargs: Any) -> None:
+    async def async_turn_on(self, **kwargs: Any) -> None:
         """Turn the switch on."""
         if self._mapping.setter:
             return self._mapping.setter(self, self._product, True)
@@ -176,9 +176,9 @@ class GimdowBLESwitch(GimdowBLEEntity, SwitchEntity, RestoreEntity):
             )
             new_value = True
         if datapoint:
-            self._hass.create_task(datapoint.set_value(new_value))
+            await datapoint.set_value(new_value)
 
-    def turn_off(self, **kwargs: Any) -> None:
+    async def async_turn_off(self, **kwargs: Any) -> None:
         """Turn the switch off."""
         if self._mapping.setter:
             return self._mapping.setter(self, self._product, False)
@@ -203,7 +203,7 @@ class GimdowBLESwitch(GimdowBLEEntity, SwitchEntity, RestoreEntity):
             )
             new_value = False
         if datapoint:
-            self._hass.create_task(datapoint.set_value(new_value))
+            await datapoint.set_value(new_value)
 
     @property
     def available(self) -> bool:

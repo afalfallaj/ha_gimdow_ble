@@ -47,15 +47,12 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     coordinator = GimdowBLECoordinator(hass, device)
 
-    '''
     try:
         await device.update()
     except BLEAK_EXCEPTIONS as ex:
         raise ConfigEntryNotReady(
             f"Could not communicate with Gimdow BLE device with address {address}"
         ) from ex
-    '''
-    hass.add_job(device.update())
 
     @callback
     def _async_update_ble(

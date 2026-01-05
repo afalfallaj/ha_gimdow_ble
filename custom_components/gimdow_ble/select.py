@@ -158,7 +158,7 @@ class GimdowBLESelect(GimdowBLEEntity, SelectEntity, RestoreEntity):
 
         return None
 
-    def select_option(self, value: str) -> None:
+    async def async_select_option(self, value: str) -> None:
         """Change the selected option."""
         if value in self._attr_options:
             if self._mapping.value_mapping:
@@ -175,7 +175,7 @@ class GimdowBLESelect(GimdowBLEEntity, SelectEntity, RestoreEntity):
                         key,
                     )
                     if datapoint:
-                        self._hass.create_task(datapoint.set_value(key))
+                        await datapoint.set_value(key)
             else:
                 int_value = self._attr_options.index(value)
                 datapoint = self._device.datapoints.get_or_create(
@@ -184,7 +184,7 @@ class GimdowBLESelect(GimdowBLEEntity, SelectEntity, RestoreEntity):
                     int_value,
                 )
                 if datapoint:
-                    self._hass.create_task(datapoint.set_value(int_value))
+                    await datapoint.set_value(int_value)
 
 
 async def async_setup_entry(

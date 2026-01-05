@@ -2,17 +2,17 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-
+from datetime import timedelta
 import logging
-from threading import Timer
 
 from homeassistant.components.lock import (
     LockEntity,
     LockEntityDescription,
 )
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.core import HomeAssistant
+from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
+from homeassistant.helpers.event import async_track_time_interval
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
 
 from .const import DOMAIN
@@ -88,21 +88,22 @@ class GimdowBLELock(GimdowBLEEntity, LockEntity):
     ) -> None:
         super().__init__(hass, coordinator, device, product, mapping.description)
         self._mapping = mapping
-        
+
+    async def async_added_to_hass(self) -> None:
+        """Run when entity about to be added to hass."""
+        await super().async_added_to_hass()
         # Gimdow specific polling
         if self._product.lock:
-            self._poll_thread = Timer(60, self._poll_device)
-            self._poll_thread.start()
+            self.async_on_remove(
+                async_track_time_interval(
+                    self.hass, self._async_poll_device, timedelta(seconds=60)
+                )
+            )
 
-    def _poll_device(self):
+    async def _async_poll_device(self, now=None):
         """Send status query to keep connection alive/wake device."""
-        if self.hass.is_stopping:
-            return
-            
-        self.hass.create_task(self._device.update())
-        # Reschedule
-        self._poll_thread = Timer(60, self._poll_device)
-        self._poll_thread.start()
+        # Check if stopping is not needed as async_track_time_interval handles cleanup via async_on_remove
+        await self._device.update()
 
     @property
     def is_locked(self) -> bool | None:
@@ -112,7 +113,7 @@ class GimdowBLELock(GimdowBLEEntity, LockEntity):
             return not bool(datapoint.value)
         return None
 
-    def lock(self, **kwargs) -> None:
+    async def async_lock(self, **kwargs) -> None:
         """Lock the device."""
         datapoint = self._device.datapoints.get_or_create(
             self._mapping.lock_dp_id,
@@ -120,9 +121,9 @@ class GimdowBLELock(GimdowBLEEntity, LockEntity):
             self._mapping.lock_value,
         )
         if datapoint:
-            self._hass.create_task(datapoint.set_value(self._mapping.lock_value))
+            await datapoint.set_value(self._mapping.lock_value)
 
-    def unlock(self, **kwargs) -> None:
+    async def async_unlock(self, **kwargs) -> None:
         """Unlock the device."""
         datapoint = self._device.datapoints.get_or_create(
             self._mapping.unlock_dp_id,
@@ -130,7 +131,7 @@ class GimdowBLELock(GimdowBLEEntity, LockEntity):
             self._mapping.unlock_value,
         )
         if datapoint:
-            self._hass.create_task(datapoint.set_value(self._mapping.unlock_value))
+            await datapoint.set_value(self._mapping.unlock_value)
 
 
 async def async_setup_entry(
