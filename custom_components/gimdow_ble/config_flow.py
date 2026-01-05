@@ -19,20 +19,11 @@ from homeassistant.components.bluetooth import (
     async_discovered_service_info,
 )
 from homeassistant.const import (
-    CONF_ADDRESS, 
+    CONF_ADDRESS,
     CONF_DEVICE_ID,
     CONF_COUNTRY_CODE,
     CONF_PASSWORD,
     CONF_USERNAME,
-    CONF_UUID,
-    CONF_LOCAL_KEY,
-    CONF_CATEGORY,
-    CONF_PRODUCT_ID,
-    CONF_DEVICE_NAME,
-    CONF_PRODUCT_MODEL,
-    CONF_PRODUCT_NAME,
-    CONF_FUNCTIONS,
-    CONF_STATUS_RANGE,
 )
 from homeassistant.core import callback
 from homeassistant.data_entry_flow import FlowHandler, FlowResult
@@ -44,7 +35,16 @@ from .const import (
     CONF_ACCESS_SECRET,
     CONF_APP_TYPE,
     CONF_AUTH_TYPE,
+    CONF_CATEGORY,
+    CONF_DEVICE_NAME,
     CONF_ENDPOINT,
+    CONF_FUNCTIONS,
+    CONF_LOCAL_KEY,
+    CONF_PRODUCT_ID,
+    CONF_PRODUCT_MODEL,
+    CONF_PRODUCT_NAME,
+    CONF_STATUS_RANGE,
+    CONF_UUID,
     DOMAIN,
     SMARTLIFE_APP,
     TUYA_COUNTRIES,
