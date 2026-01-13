@@ -206,7 +206,8 @@ class GimdowBLEOptionsFlow(OptionsFlowWithReload):
             if CONF_DOOR_SENSOR not in user_input:
                 user_input[CONF_DOOR_SENSOR] = None
 
-            return self.async_create_entry(title="", data=user_input)
+            options = {**self.config_entry.options, **user_input}
+            return self.async_create_entry(title="", data=options)
 
         return self.async_show_form(
             step_id="init",
