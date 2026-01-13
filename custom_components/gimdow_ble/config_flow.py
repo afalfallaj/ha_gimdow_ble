@@ -11,8 +11,9 @@ from tuya_iot import AuthType
 
 from homeassistant.config_entries import (
     ConfigEntry,
+    ConfigEntry,
     ConfigFlow,
-    OptionsFlowWithConfigEntry,
+    OptionsFlowWithReload,
 )
 from homeassistant.components.bluetooth import (
     BluetoothServiceInfoBleak,
@@ -175,8 +176,12 @@ def _show_login_form(
     )
 
 
-class GimdowBLEOptionsFlow(OptionsFlowWithConfigEntry):
+class GimdowBLEOptionsFlow(OptionsFlowWithReload):
     """Handle a Gimdow BLE options flow."""
+
+    def __init__(self, config_entry: ConfigEntry) -> None:
+        """Initialize options flow."""
+        self.config_entry = config_entry
 
     async def async_step_init(
         self, user_input: dict[str, Any] | None = None
@@ -207,10 +212,13 @@ class GimdowBLEOptionsFlow(OptionsFlowWithConfigEntry):
             ),
         }
 
+        data_schema = self.add_suggested_values_to_schema(
+            vol.Schema(schema), options
+        )
+
         return self.async_show_form(
             step_id="init",
-            data_schema=vol.Schema(schema),
-            suggested_values=options
+            data_schema=data_schema,
         )
 
 
