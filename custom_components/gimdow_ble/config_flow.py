@@ -108,61 +108,62 @@ async def _try_login(
                 TUYA_RESPONSE_CODE: response.get(TUYA_RESPONSE_CODE),
                 TUYA_RESPONSE_MSG: response.get(TUYA_RESPONSE_MSG),
             }
-        )
+def _show_login_form(
+    flow: FlowHandler,
+    user_input: dict[str, Any],
+    errors: dict[str, str],
+    placeholders: dict[str, Any],
+) -> FlowResult:
+    """Shows the Tuya IOT platform login form."""
+    if user_input is not None and user_input.get(CONF_COUNTRY_CODE) is not None:
+        for country in TUYA_COUNTRIES:
+            if country.country_code == user_input[CONF_COUNTRY_CODE]:
+                user_input[CONF_COUNTRY_CODE] = country.name
+                break
 
-    return None
+    def_country_name: str | None = None
+    try:
+        def_country = pycountry.countries.get(alpha_2=flow.hass.config.country)
+        if def_country:
+            def_country_name = def_country.name
+    except Exception:
+        pass
 
+    schema = {
+        vol.Required(
+            CONF_COUNTRY_CODE,
+            default=user_input.get(CONF_COUNTRY_CODE, def_country_name),
+        ): vol.In(
+            # We don't pass a dict {code:name} because country codes can be duplicate.
+            [country.name for country in TUYA_COUNTRIES]
+        ),
+        vol.Required(
+            CONF_ACCESS_ID, default=user_input.get(CONF_ACCESS_ID, "")
+        ): str,
+        vol.Required(
+            CONF_ACCESS_SECRET,
+            default=user_input.get(CONF_ACCESS_SECRET, ""),
+        ): str,
+        vol.Required(
+            CONF_USERNAME, default=user_input.get(CONF_USERNAME, "")
+        ): str,
+        vol.Required(
+            CONF_PASSWORD, default=user_input.get(CONF_PASSWORD, "")
+        ): str,
+        vol.Optional(
+             CONF_DOOR_SENSOR,
+             default=user_input.get(CONF_DOOR_SENSOR),
+        ): EntitySelector(
+            EntitySelectorConfig(domain="binary_sensor")
+        ),
+    }
 
-                            data=entry.manager.data,
-                        )
-                    else:
-                        errors["base"] = "device_not_registered"
-
-        if user_input is None:
-            user_input = {}
-            user_input.update(self.config_entry.options)
-
-        # Show door sensor selection along with login? Or separate step?
-        # Requirement says "Config Flow" or "Device Config Flow".
-        # Let's add it to the form below if we are modifying options.
-        # But wait, options flow effectively *is* "Device Config Flow" for existing devices.
-        # The current implementation of `async_step_login` seems to be the main step for options.
-
-        schema = {
-            vol.Required(
-                CONF_COUNTRY_CODE,
-                default=user_input.get(CONF_COUNTRY_CODE, def_country_name),
-            ): vol.In(
-                # We don't pass a dict {code:name} because country codes can be duplicate.
-                [country.name for country in TUYA_COUNTRIES]
-            ),
-            vol.Required(
-                CONF_ACCESS_ID, default=user_input.get(CONF_ACCESS_ID, "")
-            ): str,
-            vol.Required(
-                CONF_ACCESS_SECRET,
-                default=user_input.get(CONF_ACCESS_SECRET, ""),
-            ): str,
-            vol.Required(
-                CONF_USERNAME, default=user_input.get(CONF_USERNAME, "")
-            ): str,
-            vol.Required(
-                CONF_PASSWORD, default=user_input.get(CONF_PASSWORD, "")
-            ): str,
-            vol.Optional(
-                 CONF_DOOR_SENSOR,
-                 default=user_input.get(CONF_DOOR_SENSOR),
-            ): EntitySelector(
-                EntitySelectorConfig(domain="binary_sensor")
-            ),
-        }
-
-        return flow.async_show_form(
-            step_id="login",
-            data_schema=vol.Schema(schema),
-            errors=errors,
-            description_placeholders=placeholders,
-        )
+    return flow.async_show_form(
+        step_id="login",
+        data_schema=vol.Schema(schema),
+        errors=errors,
+        description_placeholders=placeholders,
+    )
 
 
 class GimdowBLEOptionsFlow(OptionsFlowWithConfigEntry):
