@@ -134,6 +134,10 @@ def _show_login_form(
     except Exception:
         pass
 
+    sensor_default = user_input.get(CONF_DOOR_SENSOR)
+    if sensor_default is None:
+        sensor_default = vol.UNDEFINED
+
     schema = {
         vol.Required(
             CONF_COUNTRY_CODE,
@@ -157,7 +161,7 @@ def _show_login_form(
         ): str,
         vol.Optional(
              CONF_DOOR_SENSOR,
-             default=user_input.get(CONF_DOOR_SENSOR),
+             default=sensor_default,
         ): EntitySelector(
             EntitySelectorConfig(domain="binary_sensor")
         ),
