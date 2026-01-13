@@ -183,14 +183,18 @@ class GimdowBLEOptionsFlow(OptionsFlowWithConfigEntry):
     ) -> FlowResult:
         """Manage the options."""
         if user_input is not None:
+            _LOGGER.debug(f"Options flow init received user_input: {user_input}")
             options = dict(self.config_entry.options)
             
             door_sensor = user_input.get(CONF_DOOR_SENSOR)
             if door_sensor:
+                _LOGGER.debug(f"Setting door sensor to: {door_sensor}")
                 options[CONF_DOOR_SENSOR] = door_sensor
             else:
+                _LOGGER.debug("Removing door sensor from options")
                 options.pop(CONF_DOOR_SENSOR, None)
 
+            _LOGGER.debug(f"Final options to save: {options}")
             return self.async_create_entry(title="", data=options)
 
         options = self.config_entry.options
