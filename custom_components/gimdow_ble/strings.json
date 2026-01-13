@@ -1,7 +1,8 @@
 {
   "config": {
     "abort": {
-      "no_unconfigured_devices": "No unconfigured devices found."
+      "no_unconfigured_devices": "No unconfigured devices found.",
+      "reauth_successful": "Re-authentication was successful."
     },
     "error": {
       "device_not_registered": "Device is not registered in Tuya cloud",
@@ -36,6 +37,18 @@
           "local_key": "Local Key",
           "device_id": "Device ID",
           "name": "Device Name"
+        }
+      },
+      "reauth_confirm": {
+        "title": "Re-authenticate Gimdow Lock",
+        "description": "The current credentials are invalid or expired. Please enter new Tuya IoT credentials.",
+        "data": {
+          "access_id": "Tuya IoT Access ID",
+          "access_secret": "Tuya IoT Access Secret",
+          "country_code": "Country",
+          "password": "Tuya Password",
+          "username": "Tuya Account",
+          "door_sensor": "Door Sensor (Optional)"
         }
       },
       "user": {

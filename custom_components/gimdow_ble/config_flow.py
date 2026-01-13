@@ -11,7 +11,6 @@ from tuya_iot import AuthType
 
 from homeassistant.config_entries import (
     ConfigEntry,
-    ConfigEntry,
     ConfigFlow,
     OptionsFlowWithReload,
 )
@@ -29,6 +28,9 @@ from homeassistant.const import (
 from homeassistant.helpers.selector import (
     EntitySelector,
     EntitySelectorConfig,
+    SelectSelector,
+    SelectSelectorConfig,
+    SelectSelectorMode,
 )
 from homeassistant.core import callback
 from homeassistant.data_entry_flow import FlowHandler, FlowResult
@@ -119,6 +121,7 @@ def _show_login_form(
     user_input: dict[str, Any],
     errors: dict[str, str],
     placeholders: dict[str, Any],
+    step_id: str = "login",
 ) -> FlowResult:
     """Shows the Tuya IOT platform login form."""
     if user_input is not None and user_input.get(CONF_COUNTRY_CODE) is not None:
@@ -169,11 +172,26 @@ def _show_login_form(
     }
 
     return flow.async_show_form(
-        step_id="login",
+        step_id=step_id,
         data_schema=vol.Schema(schema),
         errors=errors,
         description_placeholders=placeholders,
     )
+
+
+def _get_options_schema(defaults: dict[str, Any] | None = None) -> vol.Schema:
+    """Return the options schema with optional defaults."""
+    defaults = defaults or {}
+    schema = {}
+    
+    schema[vol.Optional(
+        CONF_DOOR_SENSOR,
+        description={"suggested_value": defaults.get(CONF_DOOR_SENSOR)}
+    )] = EntitySelector(
+        EntitySelectorConfig(domain="binary_sensor")
+    )
+    
+    return vol.Schema(schema)
 
 
 class GimdowBLEOptionsFlow(OptionsFlowWithReload):
@@ -184,37 +202,26 @@ class GimdowBLEOptionsFlow(OptionsFlowWithReload):
     ) -> FlowResult:
         """Manage the options."""
         if user_input is not None:
-            _LOGGER.debug(f"Options flow init received user_input: {user_input}")
-            options = dict(self.config_entry.options)
+            # Handle clearing of optional fields
+            if CONF_DOOR_SENSOR not in user_input:
+                user_input[CONF_DOOR_SENSOR] = None
             
-            door_sensor = user_input.get(CONF_DOOR_SENSOR)
-            if door_sensor:
-                _LOGGER.debug(f"Setting door sensor to: {door_sensor}")
-                options[CONF_DOOR_SENSOR] = door_sensor
-            else:
-                _LOGGER.debug("Removing door sensor from options")
-                options.pop(CONF_DOOR_SENSOR, None)
-
-            _LOGGER.debug(f"Final options to save: {options}")
-            return self.async_create_entry(title="", data=options)
-
-        options = self.config_entry.options
-
-        schema = {
-            vol.Optional(
-                CONF_DOOR_SENSOR,
-            ): EntitySelector(
-                EntitySelectorConfig(domain="binary_sensor")
-            ),
-        }
-
-        data_schema = self.add_suggested_values_to_schema(
-            vol.Schema(schema), options
-        )
+            # Filter out None values to actually remove them from the config entry options
+            # OR pass them as None if the integration expects it. 
+            # The integration checks `if door_sensor:` so None is fine.
+            # But the user example creates entry with `data=user_input`.
+            
+            # The cleanest way for "removal" is often to just save the None 
+            # or pop it. Storage often keeps keys with null values.
+            
+            # Let's match the user's example logic:
+            # "return self.async_create_entry(title="", data=user_input)"
+            
+            return self.async_create_entry(title="", data=user_input)
 
         return self.async_show_form(
             step_id="init",
-            data_schema=data_schema,
+            data_schema=_get_options_schema(self.config_entry.options),
         )
 
 
@@ -420,10 +427,15 @@ class GimdowBLEConfigFlow(ConfigFlow, domain=DOMAIN):
              self._discovered_devices[discovery.address] = discovery
              
         addresses = list(self._discovered_devices.keys())
-        # Add any typed in address if previously failed validation etc? No.
         
         schema = {
-            vol.Required(CONF_ADDRESS): vol.In(addresses) if addresses else str,
+            vol.Required(CONF_ADDRESS): SelectSelector(
+                SelectSelectorConfig(
+                    options=addresses,
+                    mode=SelectSelectorMode.DROPDOWN,
+                    custom_value=True,
+                )
+            ),
             vol.Required(CONF_UUID): str,
             vol.Required(CONF_LOCAL_KEY): str,
             vol.Required(CONF_DEVICE_ID): str,
@@ -435,6 +447,50 @@ class GimdowBLEConfigFlow(ConfigFlow, domain=DOMAIN):
             data_schema=vol.Schema(schema),
             errors=errors,
         )
+
+    async def async_step_reauth(
+        self, entry_data: dict[str, Any]
+    ) -> FlowResult:
+        """Handle re-authentication with Tuya."""
+        self._data.update(entry_data)
+        return await self.async_step_reauth_confirm()
+
+    async def async_step_reauth_confirm(
+        self, user_input: dict[str, Any] | None = None
+    ) -> FlowResult:
+        """Confirm re-authentication with Tuya."""
+        errors: dict[str, str] = {}
+        placeholders: dict[str, Any] = {}
+
+        if user_input is not None:
+            # Try to login with new credentials
+            data = await _try_login(
+                self._manager if self._manager else HASSGimdowBLEDeviceManager(self.hass, self._data),
+                user_input,
+                errors,
+                placeholders,
+            )
+            
+            if data:
+                # Update the existing entry
+                entry = self.hass.config_entries.async_get_entry(self.context["entry_id"])
+                self.hass.config_entries.async_update_entry(
+                    entry,
+                    data={**entry.data, **data},
+                )
+                self.hass.async_create_task(
+                    self.hass.config_entries.async_reload(entry.entry_id)
+                )
+                return self.async_abort(reason="reauth_successful")
+
+        # Pre-fill with existing data if available
+        if user_input is None:
+             user_input = {
+                 k: v for k, v in self._data.items() 
+                 if k in [CONF_ACCESS_ID, CONF_ACCESS_SECRET, CONF_USERNAME, CONF_PASSWORD, CONF_COUNTRY_CODE, CONF_DOOR_SENSOR]
+             }
+
+        return _show_login_form(self, user_input, errors, placeholders, step_id="reauth_confirm")
 
     @staticmethod
     @callback
