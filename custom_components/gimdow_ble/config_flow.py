@@ -227,11 +227,12 @@ class GimdowBLEOptionsFlow(OptionsFlowWithConfigEntry):
                         
                         # We should mix in the door sensor
                         new_options = dict(entry.manager.data)
-                        if CONF_DOOR_SENSOR in user_input:
-                            if user_input[CONF_DOOR_SENSOR]:
-                                new_options[CONF_DOOR_SENSOR] = user_input[CONF_DOOR_SENSOR]
-                            elif CONF_DOOR_SENSOR in new_options:
-                                del new_options[CONF_DOOR_SENSOR]
+                        
+                        sensor_val = user_input.get(CONF_DOOR_SENSOR)
+                        if sensor_val:
+                            new_options[CONF_DOOR_SENSOR] = sensor_val
+                        elif CONF_DOOR_SENSOR in new_options:
+                            del new_options[CONF_DOOR_SENSOR]
                         
                         return self.async_create_entry(
                             title=self.config_entry.title,
