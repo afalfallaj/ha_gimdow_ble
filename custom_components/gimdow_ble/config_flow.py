@@ -205,18 +205,7 @@ class GimdowBLEOptionsFlow(OptionsFlowWithReload):
             # Handle clearing of optional fields
             if CONF_DOOR_SENSOR not in user_input:
                 user_input[CONF_DOOR_SENSOR] = None
-            
-            # Filter out None values to actually remove them from the config entry options
-            # OR pass them as None if the integration expects it. 
-            # The integration checks `if door_sensor:` so None is fine.
-            # But the user example creates entry with `data=user_input`.
-            
-            # The cleanest way for "removal" is often to just save the None 
-            # or pop it. Storage often keeps keys with null values.
-            
-            # Let's match the user's example logic:
-            # "return self.async_create_entry(title="", data=user_input)"
-            
+
             return self.async_create_entry(title="", data=user_input)
 
         return self.async_show_form(
@@ -389,18 +378,13 @@ class GimdowBLEConfigFlow(ConfigFlow, domain=DOMAIN):
                  CONF_LOCAL_KEY: user_input[CONF_LOCAL_KEY],
                  CONF_DEVICE_ID: user_input[CONF_DEVICE_ID],
                  CONF_DEVICE_NAME: user_input.get(CONF_DEVICE_NAME, "Gimdow Lock"),
-                 CONF_CATEGORY: "jtmspro", # Default to Gimdow category
-                 CONF_PRODUCT_ID: "rlyxv7pe", # Default product id
+                 CONF_CATEGORY: "jtmspro",
+                 CONF_PRODUCT_ID: "rlyxv7pe",
                  CONF_PRODUCT_MODEL: "A1 PRO MAX",
                  CONF_PRODUCT_NAME: "Gimdow Lock",
-                 CONF_FUNCTIONS: [], # Manual entry assumes default functions or None
+                 CONF_FUNCTIONS: [],
                  CONF_STATUS_RANGE: []
              }
-             
-             # Store in manager's cache effectively simulation a "cloud" device
-             # Or just pass it to options?
-             # The integration uses `HASSGimdowBLEDeviceManager` which mimics Tuya Cloud behavior.
-             # We can just store these in the config entry data options.
              
              self._data.update(user_input)
              # Add credentials to manager data manually so they are saved
