@@ -197,10 +197,6 @@ def _get_options_schema(defaults: dict[str, Any] | None = None) -> vol.Schema:
 class GimdowBLEOptionsFlow(OptionsFlowWithReload):
     """Handle a Gimdow BLE options flow."""
 
-    def __init__(self, config_entry: ConfigEntry) -> None:
-        """Initialize options flow."""
-        self.config_entry = config_entry
-
     async def async_step_init(
         self, user_input: dict[str, Any] | None = None
     ) -> FlowResult:
@@ -502,4 +498,4 @@ class GimdowBLEConfigFlow(ConfigFlow, domain=DOMAIN):
         config_entry: ConfigEntry,
     ) -> GimdowBLEOptionsFlow:
         """Get the options flow for this handler."""
-        return GimdowBLEOptionsFlow(config_entry)
+        return GimdowBLEOptionsFlow()
