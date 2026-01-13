@@ -12,9 +12,12 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.event import async_track_time_interval
+from homeassistant.helpers.event import async_track_state_change_event
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
+from homeassistant.exceptions import HomeAssistantError
+from homeassistant.const import STATE_ON, STATE_OFF
 
-from .const import DOMAIN
+from .const import DOMAIN, CONF_DOOR_SENSOR
 from .devices import GimdowBLEData, GimdowBLEEntity, GimdowBLEProductInfo
 from .gimdow_ble import GimdowBLEDataPointType, GimdowBLEDevice
 
@@ -84,9 +87,41 @@ class GimdowBLELock(GimdowBLEEntity, LockEntity):
         device: GimdowBLEDevice,
         product: GimdowBLEProductInfo,
         mapping: GimdowBLELockMapping,
+        door_sensor: str | None = None,
     ) -> None:
         super().__init__(hass, coordinator, device, product, mapping.description)
         self._mapping = mapping
+        self._door_sensor = door_sensor
+        self._is_door_open = False
+
+    async def async_added_to_hass(self) -> None:
+        """Run when entity about to be added to hass."""
+        await super().async_added_to_hass()
+        if self._door_sensor:
+            self.async_on_remove(
+                async_track_state_change_event(
+                    self.hass, [self._door_sensor], self._async_door_sensor_changed
+                )
+            )
+            # Initialize state
+            state = self.hass.states.get(self._door_sensor)
+            if state:
+                self._is_door_open = state.state == STATE_ON
+
+    @callback
+    def _async_door_sensor_changed(self, event) -> None:
+        """Handle door sensor state changes."""
+        new_state = event.data.get("new_state")
+        if new_state:
+            self._is_door_open = new_state.state == STATE_ON
+            self.async_write_ha_state()
+
+    @property
+    def is_jammed(self) -> bool | None:
+        """Return true if lock is jammed (locked while open)."""
+        if self._is_door_open and self.is_locked:
+            return True
+        return None
 
 
     @property
@@ -99,6 +134,9 @@ class GimdowBLELock(GimdowBLEEntity, LockEntity):
 
     async def async_lock(self, **kwargs) -> None:
         """Lock the device."""
+        if self._is_door_open:
+            raise HomeAssistantError("Cannot lock while door is open")
+
         datapoint = self._device.datapoints.get_or_create(
             self._mapping.lock_dp_id,
             GimdowBLEDataPointType.DT_BOOL,
@@ -138,6 +176,7 @@ async def async_setup_entry(
                     data.device,
                     data.product,
                     mapping,
+                    door_sensor=entry.options.get(CONF_DOOR_SENSOR) or entry.data.get(CONF_DOOR_SENSOR),
                 )
             )
     async_add_entities(entities)

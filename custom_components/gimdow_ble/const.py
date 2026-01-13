@@ -23,6 +23,8 @@ CONF_PRODUCT_MODEL: Final = "product_model"
 CONF_PRODUCT_NAME: Final = "product_name"
 CONF_FUNCTIONS: Final = "functions"
 CONF_STATUS_RANGE: Final = "status_range"
+CONF_DOOR_SENSOR: Final = "door_sensor"
+
 
 CONF_AUTH_TYPE: Final = "auth_type"
 

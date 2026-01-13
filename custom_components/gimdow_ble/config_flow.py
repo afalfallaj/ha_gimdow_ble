@@ -25,6 +25,10 @@ from homeassistant.const import (
     CONF_PASSWORD,
     CONF_USERNAME,
 )
+from homeassistant.helpers.selector import (
+    EntitySelector,
+    EntitySelectorConfig,
+)
 from homeassistant.core import callback
 from homeassistant.data_entry_flow import FlowHandler, FlowResult
 
@@ -45,6 +49,7 @@ from .const import (
     CONF_PRODUCT_NAME,
     CONF_STATUS_RANGE,
     CONF_UUID,
+    CONF_DOOR_SENSOR,
     DOMAIN,
     SMARTLIFE_APP,
     TUYA_COUNTRIES,
@@ -108,56 +113,56 @@ async def _try_login(
     return None
 
 
-def _show_login_form(
-    flow: FlowHandler,
-    user_input: dict[str, Any],
-    errors: dict[str, str],
-    placeholders: dict[str, Any],
-) -> FlowResult:
-    """Shows the Tuya IOT platform login form."""
-    if user_input is not None and user_input.get(CONF_COUNTRY_CODE) is not None:
-        for country in TUYA_COUNTRIES:
-            if country.country_code == user_input[CONF_COUNTRY_CODE]:
-                user_input[CONF_COUNTRY_CODE] = country.name
-                break
+                            data=entry.manager.data,
+                        )
+                    else:
+                        errors["base"] = "device_not_registered"
 
-    def_country_name: str | None = None
-    try:
-        def_country = pycountry.countries.get(alpha_2=flow.hass.config.country)
-        if def_country:
-            def_country_name = def_country.name
-    except Exception:
-        pass
+        if user_input is None:
+            user_input = {}
+            user_input.update(self.config_entry.options)
 
-    return flow.async_show_form(
-        step_id="login",
-        data_schema=vol.Schema(
-            {
-                vol.Required(
-                    CONF_COUNTRY_CODE,
-                    default=user_input.get(CONF_COUNTRY_CODE, def_country_name),
-                ): vol.In(
-                    # We don't pass a dict {code:name} because country codes can be duplicate.
-                    [country.name for country in TUYA_COUNTRIES]
-                ),
-                vol.Required(
-                    CONF_ACCESS_ID, default=user_input.get(CONF_ACCESS_ID, "")
-                ): str,
-                vol.Required(
-                    CONF_ACCESS_SECRET,
-                    default=user_input.get(CONF_ACCESS_SECRET, ""),
-                ): str,
-                vol.Required(
-                    CONF_USERNAME, default=user_input.get(CONF_USERNAME, "")
-                ): str,
-                vol.Required(
-                    CONF_PASSWORD, default=user_input.get(CONF_PASSWORD, "")
-                ): str,
-            }
-        ),
-        errors=errors,
-        description_placeholders=placeholders,
-    )
+        # Show door sensor selection along with login? Or separate step?
+        # Requirement says "Config Flow" or "Device Config Flow".
+        # Let's add it to the form below if we are modifying options.
+        # But wait, options flow effectively *is* "Device Config Flow" for existing devices.
+        # The current implementation of `async_step_login` seems to be the main step for options.
+
+        schema = {
+            vol.Required(
+                CONF_COUNTRY_CODE,
+                default=user_input.get(CONF_COUNTRY_CODE, def_country_name),
+            ): vol.In(
+                # We don't pass a dict {code:name} because country codes can be duplicate.
+                [country.name for country in TUYA_COUNTRIES]
+            ),
+            vol.Required(
+                CONF_ACCESS_ID, default=user_input.get(CONF_ACCESS_ID, "")
+            ): str,
+            vol.Required(
+                CONF_ACCESS_SECRET,
+                default=user_input.get(CONF_ACCESS_SECRET, ""),
+            ): str,
+            vol.Required(
+                CONF_USERNAME, default=user_input.get(CONF_USERNAME, "")
+            ): str,
+            vol.Required(
+                CONF_PASSWORD, default=user_input.get(CONF_PASSWORD, "")
+            ): str,
+            vol.Optional(
+                 CONF_DOOR_SENSOR,
+                 default=user_input.get(CONF_DOOR_SENSOR),
+            ): EntitySelector(
+                EntitySelectorConfig(domain="binary_sensor")
+            ),
+        }
+
+        return flow.async_show_form(
+            step_id="login",
+            data_schema=vol.Schema(schema),
+            errors=errors,
+            description_placeholders=placeholders,
+        )
 
 
 class GimdowBLEOptionsFlow(OptionsFlowWithConfigEntry):
@@ -183,11 +188,19 @@ class GimdowBLEOptionsFlow(OptionsFlowWithConfigEntry):
         address: str | None = self.config_entry.data.get(CONF_ADDRESS)
 
         if user_input is not None:
+             # If strictly only updating options without re-login (if login fields are empty/unchanged?), 
+             # we might want to handle that. But the current flow forces login info.
+             # We need to preserve the door sensor option.
+             
+            doorsensor = user_input.get(CONF_DOOR_SENSOR)
+            
             entry: GimdowBLEData | None = None
             domain_data = self.hass.data.get(DOMAIN)
             if domain_data:
                 entry = domain_data.get(self.config_entry.entry_id)
-            if entry:
+            
+            # If standard login fields are provided, try login
+            if entry and user_input.get(CONF_ACCESS_ID): # Check if looks like login data
                 login_data = await _try_login(
                     entry.manager,
                     user_input,
@@ -199,12 +212,29 @@ class GimdowBLEOptionsFlow(OptionsFlowWithConfigEntry):
                         address, True, True
                     )
                     if credentials:
+                        data = entry.manager.data
+                        # Make sure we don't return the whole manager data as options, 
+                        # usually options should clearly separate from data. 
+                        # But here it seems mixed. We'll add the sensor to the result.
+                        # The original code `return self.async_create_entry(..., data=entry.manager.data)`
+                        # updates the options with manager data. 
+                        
+                        # We should mix in the door sensor
+                        new_options = dict(entry.manager.data)
+                        if doorsensor:
+                            new_options[CONF_DOOR_SENSOR] = doorsensor
+                        
                         return self.async_create_entry(
                             title=self.config_entry.title,
-                            data=entry.manager.data,
+                            data=new_options,
                         )
                     else:
                         errors["base"] = "device_not_registered"
+            elif doorsensor is not None:
+                 # Just updating the door sensor?
+                 # The current form REQUIRES login info, so we probably always hit the block above 
+                 # unless we relax the requirements for options flow.
+                 pass
 
         if user_input is None:
             user_input = {}
