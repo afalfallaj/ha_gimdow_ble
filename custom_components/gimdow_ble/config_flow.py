@@ -197,6 +197,8 @@ class GimdowBLEOptionsFlow(OptionsFlowWithConfigEntry):
             _LOGGER.debug(f"Final options to save: {options}")
             return self.async_create_entry(title="", data=options)
 
+        options = self.config_entry.options
+
         schema = {
             vol.Optional(
                 CONF_DOOR_SENSOR,

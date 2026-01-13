@@ -11,10 +11,10 @@
   - Motor direction
   - Lock volume
    - Lock volume
-- **Door Position Awareness**:
-  - Optional integration with a binary sensor (door contact).
-  - Prevents locking when the door is open.
-  - Reports "Jammed" state if locked while open.
+- **Door Position Awareness (Optional)**:
+  - Integrate with any `binary_sensor` (door contact) to make the lock "aware" of the door's position.
+  - **Safety Interlock**: If you try to lock while the door is open, the lock enters a **"Jammed"** (Waiting) state instead of locking the bolt in mid-air.
+  - **Auto-Lock on Close**: If a lock command was pending (Jammed state), the lock automatically engages the moment the door is closed.
 - **Calibration**: Dedicated buttons for mechanical calibration:
   - Sync Clock
   - Recalibrate
@@ -52,7 +52,7 @@ Recommended if you don't have your device keys.
 3. Select **Login via Tuya Cloud**.
 4. Enter your Tuya IoT credentials (Access ID, Access Secret, etc.).
    - *Refer to the [official Tuya integration documentation](https://www.home-assistant.io/integrations/tuya/) for instructions on how to get these credentials.*
-   - **(Optional) Door Sensor**: Select a binary sensor to enable door position awareness.
+   - **(Optional) Door Sensor**: You can select a binary sensor now or configure it later.
 5. Select your Gimdow device from the discovered list.
 
 ### Option 2: Manual Configuration
@@ -66,7 +66,12 @@ Use this if you already have your device's keys and want to skip the cloud login
    - **UUID**
    - **Local Key**
    - **Device ID**
-   - **(Optional) Door Sensor**: You can configure this later in the integration options.
+
+### Configuration
+You can change sensor settings:
+1. Go to **Settings > Devices & Services > Gimdow A1 Pro Max BLE**.
+2. Click **Configure**.
+3. **Door Sensor**: Add, change, or remove the optional door sensor to enable/disable the Door Position Awareness features.
 
 ## Usage
 
