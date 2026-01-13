@@ -108,6 +108,11 @@ async def _try_login(
                 TUYA_RESPONSE_CODE: response.get(TUYA_RESPONSE_CODE),
                 TUYA_RESPONSE_MSG: response.get(TUYA_RESPONSE_MSG),
             }
+        )
+
+    return None
+
+
 def _show_login_form(
     flow: FlowHandler,
     user_input: dict[str, Any],
@@ -302,6 +307,8 @@ class GimdowBLEConfigFlow(ConfigFlow, domain=DOMAIN):
             )
             if data:
                 self._data.update(data)
+                if user_input.get(CONF_DOOR_SENSOR):
+                    self._data[CONF_DOOR_SENSOR] = user_input[CONF_DOOR_SENSOR]
                 return await self.async_step_device()
 
         if user_input is None:
