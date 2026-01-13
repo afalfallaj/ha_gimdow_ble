@@ -178,83 +178,39 @@ def _show_login_form(
 class GimdowBLEOptionsFlow(OptionsFlowWithConfigEntry):
     """Handle a Gimdow BLE options flow."""
 
-    def __init__(self, config_entry: ConfigEntry) -> None:
-        """Initialize options flow."""
-        super().__init__(config_entry)
-
     async def async_step_init(
         self, user_input: dict[str, Any] | None = None
     ) -> FlowResult:
         """Manage the options."""
-        return await self.async_step_login(user_input)
-
-    async def async_step_login(
-        self, user_input: dict[str, Any] | None = None
-    ) -> FlowResult:
-        """Handle the Tuya IOT platform login step."""
-        errors: dict[str, str] = {}
-        placeholders: dict[str, Any] = {}
-        credentials: GimdowBLEDeviceCredentials | None = None
-        address: str | None = self.config_entry.data.get(CONF_ADDRESS)
-
         if user_input is not None:
-             # If strictly only updating options without re-login (if login fields are empty/unchanged?), 
-             # we might want to handle that. But the current flow forces login info.
-             # We need to preserve the door sensor option.
-             
-            doorsensor = user_input.get(CONF_DOOR_SENSOR)
+            options = dict(self.config_entry.options)
             
-            entry: GimdowBLEData | None = None
-            domain_data = self.hass.data.get(DOMAIN)
-            if domain_data:
-                entry = domain_data.get(self.config_entry.entry_id)
-            
-            # If standard login fields are provided, try login
-            if entry and user_input.get(CONF_ACCESS_ID): # Check if looks like login data
-                login_data = await _try_login(
-                    entry.manager,
-                    user_input,
-                    errors,
-                    placeholders,
-                )
-                if login_data:
-                    credentials = await entry.manager.get_device_credentials(
-                        address, True, True
-                    )
-                    if credentials:
-                        data = entry.manager.data
-                        # Make sure we don't return the whole manager data as options, 
-                        # usually options should clearly separate from data. 
-                        # But here it seems mixed. We'll add the sensor to the result.
-                        # The original code `return self.async_create_entry(..., data=entry.manager.data)`
-                        # updates the options with manager data. 
-                        
-                        # We should mix in the door sensor
-                        new_options = dict(entry.manager.data)
-                        
-                        sensor_val = user_input.get(CONF_DOOR_SENSOR)
-                        if sensor_val:
-                            new_options[CONF_DOOR_SENSOR] = sensor_val
-                        elif CONF_DOOR_SENSOR in new_options:
-                            del new_options[CONF_DOOR_SENSOR]
-                        
-                        return self.async_create_entry(
-                            title=self.config_entry.title,
-                            data=new_options,
-                        )
-                    else:
-                        errors["base"] = "device_not_registered"
-            elif doorsensor is not None:
-                 # Just updating the door sensor?
-                 # The current form REQUIRES login info, so we probably always hit the block above 
-                 # unless we relax the requirements for options flow.
-                 pass
+            door_sensor = user_input.get(CONF_DOOR_SENSOR)
+            if door_sensor:
+                options[CONF_DOOR_SENSOR] = door_sensor
+            else:
+                options.pop(CONF_DOOR_SENSOR, None)
 
-        if user_input is None:
-            user_input = {}
-            user_input.update(self.config_entry.options)
+            return self.async_create_entry(title="", data=options)
 
-        return _show_login_form(self, user_input, errors, placeholders)
+        options = self.config_entry.options
+        door_sensor_default = options.get(CONF_DOOR_SENSOR)
+        if door_sensor_default is None:
+            door_sensor_default = vol.UNDEFINED
+
+        schema = {
+            vol.Optional(
+                CONF_DOOR_SENSOR,
+                default=door_sensor_default,
+            ): EntitySelector(
+                EntitySelectorConfig(domain="binary_sensor")
+            ),
+        }
+
+        return self.async_show_form(
+            step_id="init",
+            data_schema=vol.Schema(schema),
+        )
 
 
 class GimdowBLEConfigFlow(ConfigFlow, domain=DOMAIN):

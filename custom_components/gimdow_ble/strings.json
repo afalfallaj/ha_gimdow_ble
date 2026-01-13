@@ -107,6 +107,12 @@
       "login_error": "Login error ({code}): {msg}"
     },
     "step": {
+      "init": {
+        "data": {
+          "door_sensor": "Door Sensor (Optional)"
+        },
+        "description": "Configure optional settings for the Gimdow Lock."
+      },
       "login": {
         "data": {
           "access_id": "Tuya IoT Access ID",
