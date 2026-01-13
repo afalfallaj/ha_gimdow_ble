@@ -197,15 +197,9 @@ class GimdowBLEOptionsFlow(OptionsFlowWithConfigEntry):
             _LOGGER.debug(f"Final options to save: {options}")
             return self.async_create_entry(title="", data=options)
 
-        options = self.config_entry.options
-        door_sensor_default = options.get(CONF_DOOR_SENSOR)
-        if door_sensor_default is None:
-            door_sensor_default = vol.UNDEFINED
-
         schema = {
             vol.Optional(
                 CONF_DOOR_SENSOR,
-                default=door_sensor_default,
             ): EntitySelector(
                 EntitySelectorConfig(domain="binary_sensor")
             ),
@@ -214,6 +208,7 @@ class GimdowBLEOptionsFlow(OptionsFlowWithConfigEntry):
         return self.async_show_form(
             step_id="init",
             data_schema=vol.Schema(schema),
+            suggested_values=options
         )
 
 
