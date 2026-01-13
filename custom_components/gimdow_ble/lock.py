@@ -93,6 +93,8 @@ class GimdowBLELock(GimdowBLEEntity, LockEntity):
         self._mapping = mapping
         self._door_sensor = door_sensor
         self._is_door_open = False
+        self._pending_lock = False
+        _LOGGER.debug(f"GimdowBLELock initialized with door_sensor: {self._door_sensor}")
 
     async def async_added_to_hass(self) -> None:
         """Run when entity about to be added to hass."""
@@ -107,6 +109,11 @@ class GimdowBLELock(GimdowBLEEntity, LockEntity):
             state = self.hass.states.get(self._door_sensor)
             if state:
                 self._is_door_open = state.state == STATE_ON
+                _LOGGER.debug(f"Initial door sensor state for {self._door_sensor}: {state.state} (is_open={self._is_door_open})")
+            else:
+                _LOGGER.debug(f"Initial door sensor state for {self._door_sensor}: None")
+        else:
+            _LOGGER.debug("No door sensor configured for this lock")
 
     @callback
     def _async_door_sensor_changed(self, event) -> None:
@@ -114,12 +121,18 @@ class GimdowBLELock(GimdowBLEEntity, LockEntity):
         new_state = event.data.get("new_state")
         if new_state:
             self._is_door_open = new_state.state == STATE_ON
+            _LOGGER.debug(f"Door sensor {self._door_sensor} changed to: {new_state.state} (is_open={self._is_door_open})")
+            
+            if not self._is_door_open and self._pending_lock:
+                 _LOGGER.debug("Door closed and pending lock is set. Executing lock.")
+                 self.hass.async_create_task(self.async_lock())
+            
             self.async_write_ha_state()
 
     @property
     def is_jammed(self) -> bool | None:
         """Return true if lock is jammed (locked while open)."""
-        if self._is_door_open and self.is_locked:
+        if (self._is_door_open and self.is_locked) or self._pending_lock:
             return True
         return None
 
@@ -134,8 +147,14 @@ class GimdowBLELock(GimdowBLEEntity, LockEntity):
 
     async def async_lock(self, **kwargs) -> None:
         """Lock the device."""
+        _LOGGER.debug(f"Attempting to lock. is_door_open={self._is_door_open}")
         if self._is_door_open:
-            raise HomeAssistantError("Cannot lock while door is open")
+            _LOGGER.warning("Door is open. Setting pending lock (Jammed state) and waiting for door close.")
+            self._pending_lock = True
+            self.async_write_ha_state()
+            return
+        
+        self._pending_lock = False # Clear pending if we are proceeding
 
         datapoint = self._device.datapoints.get_or_create(
             self._mapping.lock_dp_id,
@@ -147,6 +166,12 @@ class GimdowBLELock(GimdowBLEEntity, LockEntity):
 
     async def async_unlock(self, **kwargs) -> None:
         """Unlock the device."""
+        if self._pending_lock:
+             _LOGGER.debug("Unlock requested. Clearing pending lock.")
+             self._pending_lock = False
+             self.async_write_ha_state()
+             return
+
         datapoint = self._device.datapoints.get_or_create(
             self._mapping.unlock_dp_id,
             GimdowBLEDataPointType.DT_BOOL,
