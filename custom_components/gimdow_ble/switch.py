@@ -108,7 +108,6 @@ class GimdowBLESwitch(GimdowBLEEntity, SwitchEntity, RestoreEntity):
         coordinator: DataUpdateCoordinator,
         device: GimdowBLEDevice,
         product: GimdowBLEProductInfo,
-        product: GimdowBLEProductInfo,
         mapping: GimdowBLESwitchMapping,
         data: GimdowBLEData,
         door_sensor: str | None = None,
@@ -283,7 +282,6 @@ async def async_setup_entry(
                 GimdowBLESwitch(
                     hass,
                     data.coordinator,
-                    data.device,
                     data.device,
                     data.product,
                     mapping,
