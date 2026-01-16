@@ -228,7 +228,7 @@ class GimdowBLELock(GimdowBLEEntity, LockEntity):
 
         # Get delay from device DP 36 (Auto Lock Time), default to 10s
         auto_lock_delay = 10
-        delay_dp = self._device.datapoints.get(36)
+        delay_dp = self._device.datapoints[36]
         if delay_dp and delay_dp.value:
             auto_lock_delay = int(delay_dp.value)
 
