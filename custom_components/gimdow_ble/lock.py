@@ -3,6 +3,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 import logging
+import asyncio
 
 from homeassistant.components.lock import (
     LockEntity,
@@ -95,6 +96,7 @@ class GimdowBLELock(GimdowBLEEntity, LockEntity):
         self._is_door_open = False
         self._pending_lock = False
         self._auto_lock_timer = None
+        self._unlock_wait_future = None
         _LOGGER.debug(f"GimdowBLELock initialized with data: {self._data}")
 
     async def async_added_to_hass(self) -> None:
@@ -132,6 +134,14 @@ class GimdowBLELock(GimdowBLEEntity, LockEntity):
         
         self.async_write_ha_state()
 
+    @callback
+    def _handle_coordinator_update(self) -> None:
+        """Handle updated data from the coordinator."""
+        if self._unlock_wait_future and not self._unlock_wait_future.done():
+             if self.is_locked is False:
+                  self._unlock_wait_future.set_result(True)
+        super()._handle_coordinator_update()
+
     @property
     def is_jammed(self) -> bool | None:
         """Return true if lock is jammed (locked while open)."""
@@ -152,6 +162,21 @@ class GimdowBLELock(GimdowBLEEntity, LockEntity):
         """Lock the device."""
         self._stop_auto_lock_timer()
         _LOGGER.debug(f"Attempting to lock. is_door_open={self._is_door_open}")
+
+        if self.is_locked is None:
+            _LOGGER.warning("Lock state is Unknown. Trying to UNLOCK first to ensure mechanical state.")
+            self._unlock_wait_future = self.hass.loop.create_future()
+            await self.async_unlock()
+            try:
+                await asyncio.wait_for(self._unlock_wait_future, timeout=10)
+                _LOGGER.debug("Device confirmed UNLOCKED. Proceeding to LOCK.")
+            except asyncio.TimeoutError:
+                _LOGGER.error("Timed out waiting for device to report UNLOCKED state. Aborting lock to prevent jamming.")
+                self._unlock_wait_future = None
+                return
+            finally:
+                self._unlock_wait_future = None
+
         if self._is_door_open:
             _LOGGER.warning("Door is open. Setting pending lock (Jammed state) and waiting for door close.")
             self._pending_lock = True
