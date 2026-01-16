@@ -17,7 +17,7 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
 from homeassistant.helpers.restore_state import RestoreEntity
 
-from .const import DOMAIN
+from .const import DOMAIN, CONF_DOOR_SENSOR
 from .devices import GimdowBLEData, GimdowBLEEntity, GimdowBLEProductInfo
 from .gimdow_ble import GimdowBLEDataPointType, GimdowBLEDevice
 
@@ -108,10 +108,19 @@ class GimdowBLESwitch(GimdowBLEEntity, SwitchEntity, RestoreEntity):
         coordinator: DataUpdateCoordinator,
         device: GimdowBLEDevice,
         product: GimdowBLEProductInfo,
+        product: GimdowBLEProductInfo,
         mapping: GimdowBLESwitchMapping,
+        data: GimdowBLEData,
+        door_sensor: str | None = None,
     ) -> None:
         super().__init__(hass, coordinator, device, product, mapping.description)
         self._mapping = mapping
+        self._data = data
+        self._door_sensor = door_sensor
+        self._is_virtualized_auto_lock = (
+            self._mapping.dp_id == 33 
+            and self._door_sensor is not None
+        )
 
     async def async_added_to_hass(self) -> None:
         """Handle entity which will be added."""
@@ -121,16 +130,31 @@ class GimdowBLESwitch(GimdowBLEEntity, SwitchEntity, RestoreEntity):
             if (last_state := await self.async_get_last_state()) is not None:
                  if last_state.state in ("on", "off"):
                     is_on = last_state.state == "on"
-                    # Populate the device cache so the property logic works
-                    self._device.datapoints.get_or_create(
-                        self._mapping.dp_id,
-                        GimdowBLEDataPointType.DT_BOOL,
-                        is_on,
-                    )
+                    is_on = last_state.state == "on"
+                    
+                    if self._is_virtualized_auto_lock:
+                        # Restore virtual state
+                        self._data.virtual_auto_lock = is_on
+                        # Force real DP off (so hardware doesn't lock while open)
+                        self._device.datapoints.get_or_create(
+                            self._mapping.dp_id,
+                            GimdowBLEDataPointType.DT_BOOL,
+                            False,
+                        )
+                    else:
+                        # Populate the device cache so the property logic works
+                        self._device.datapoints.get_or_create(
+                            self._mapping.dp_id,
+                            GimdowBLEDataPointType.DT_BOOL,
+                            is_on,
+                        )
 
     @property
     def is_on(self) -> bool:
         """Return true if switch is on."""
+        
+        if self._is_virtualized_auto_lock:
+            return self._data.virtual_auto_lock
 
         if self._mapping.getter:
             return self._mapping.getter(self, self._product)
@@ -153,6 +177,20 @@ class GimdowBLESwitch(GimdowBLEEntity, SwitchEntity, RestoreEntity):
 
     async def async_turn_on(self, **kwargs: Any) -> None:
         """Turn the switch on."""
+        
+        if self._is_virtualized_auto_lock:
+             self._data.virtual_auto_lock = True
+             self.async_write_ha_state()
+             # Ensure hardware auto-lock is OFF
+             datapoint = self._device.datapoints.get_or_create(
+                self._mapping.dp_id,
+                GimdowBLEDataPointType.DT_BOOL,
+                False,
+             )
+             if datapoint:
+                 await datapoint.set_value(False)
+             return
+
         if self._mapping.setter:
             return self._mapping.setter(self, self._product, True)
 
@@ -180,6 +218,20 @@ class GimdowBLESwitch(GimdowBLEEntity, SwitchEntity, RestoreEntity):
 
     async def async_turn_off(self, **kwargs: Any) -> None:
         """Turn the switch off."""
+        
+        if self._is_virtualized_auto_lock:
+             self._data.virtual_auto_lock = False
+             self.async_write_ha_state()
+             # Ensure hardware auto-lock is OFF
+             datapoint = self._device.datapoints.get_or_create(
+                self._mapping.dp_id,
+                GimdowBLEDataPointType.DT_BOOL,
+                False,
+             )
+             if datapoint:
+                 await datapoint.set_value(False)
+             return
+
         if self._mapping.setter:
             return self._mapping.setter(self, self._product, False)
 
@@ -232,8 +284,11 @@ async def async_setup_entry(
                     hass,
                     data.coordinator,
                     data.device,
+                    data.device,
                     data.product,
                     mapping,
+                    data=data,
+                    door_sensor=entry.options.get(CONF_DOOR_SENSOR) or entry.data.get(CONF_DOOR_SENSOR),
                 )
             )
     async_add_entities(entities)

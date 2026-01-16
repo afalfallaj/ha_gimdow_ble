@@ -60,6 +60,11 @@
         }
     },
     "entity": {
+        "binary_sensor": {
+            "door_sensor": {
+                "name": "Door Sensor"
+            }
+        },
         "button": {
             "sync_clock": {
                 "name": "Sync clock"

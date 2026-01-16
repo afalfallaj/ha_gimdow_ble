@@ -1,6 +1,6 @@
 """The Gimdow BLE integration."""
 from __future__ import annotations
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import timedelta
 from typing import Any
 from .gimdow_ble import GimdowBLEDataPointType
@@ -318,6 +318,10 @@ class GimdowBLEData:
     product: GimdowBLEProductInfo
     manager: HASSGimdowBLEDeviceManager
     coordinator: GimdowBLECoordinator
+    coordinator: GimdowBLECoordinator
+    door_update_signal: str
+    virtual_auto_lock: bool = False
+    is_door_open: bool | None = None
 
 
 @dataclass

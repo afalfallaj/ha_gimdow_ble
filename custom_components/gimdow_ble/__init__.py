@@ -25,6 +25,7 @@ PLATFORMS: list[Platform] = [
     Platform.LOCK,
     Platform.SELECT,
     Platform.SWITCH,
+    Platform.BINARY_SENSOR,
 ]
 
 _LOGGER = logging.getLogger(__name__)
@@ -74,6 +75,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         product_info,
         manager,
         coordinator,
+        door_update_signal=f"gimdow_door_update_{device.device_id}",
     )
 
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)

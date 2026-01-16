@@ -11,13 +11,13 @@ from homeassistant.components.lock import (
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
-from homeassistant.helpers.event import async_track_time_interval
-from homeassistant.helpers.event import async_track_state_change_event
+from homeassistant.helpers.event import async_track_time_interval, async_call_later
+from homeassistant.helpers.dispatcher import async_dispatcher_connect
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.const import STATE_ON, STATE_OFF
 
-from .const import DOMAIN, CONF_DOOR_SENSOR
+from .const import DOMAIN
 from .devices import GimdowBLEData, GimdowBLEEntity, GimdowBLEProductInfo
 from .gimdow_ble import GimdowBLEDataPointType, GimdowBLEDevice
 
@@ -87,47 +87,50 @@ class GimdowBLELock(GimdowBLEEntity, LockEntity):
         device: GimdowBLEDevice,
         product: GimdowBLEProductInfo,
         mapping: GimdowBLELockMapping,
-        door_sensor: str | None = None,
+        data: GimdowBLEData,
     ) -> None:
         super().__init__(hass, coordinator, device, product, mapping.description)
         self._mapping = mapping
-        self._door_sensor = door_sensor
+        self._data = data
         self._is_door_open = False
         self._pending_lock = False
-        _LOGGER.debug(f"GimdowBLELock initialized with door_sensor: {self._door_sensor}")
+        self._auto_lock_timer = None
+        _LOGGER.debug(f"GimdowBLELock initialized with data: {self._data}")
 
     async def async_added_to_hass(self) -> None:
         """Run when entity about to be added to hass."""
         await super().async_added_to_hass()
-        if self._door_sensor:
-            self.async_on_remove(
-                async_track_state_change_event(
-                    self.hass, [self._door_sensor], self._async_door_sensor_changed
-                )
+        
+        # Connect to dispatcher
+        self.async_on_remove(
+            async_dispatcher_connect(
+                self.hass,
+                self._data.door_update_signal,
+                self._async_door_sensor_changed
             )
-            # Initialize state
-            state = self.hass.states.get(self._door_sensor)
-            if state:
-                self._is_door_open = state.state == STATE_ON
-                _LOGGER.debug(f"Initial door sensor state for {self._door_sensor}: {state.state} (is_open={self._is_door_open})")
-            else:
-                _LOGGER.debug(f"Initial door sensor state for {self._door_sensor}: None")
+        )
+
+        # Initialize state
+        if self._data.is_door_open is not None:
+             self._is_door_open = self._data.is_door_open
+             _LOGGER.debug(f"Initial door state from data: {self._is_door_open}")
+             self._start_auto_lock_timer()
         else:
-            _LOGGER.debug("No door sensor configured for this lock")
+             _LOGGER.debug(f"Initial door state: Unknown (assuming closed)")
 
     @callback
-    def _async_door_sensor_changed(self, event) -> None:
+    def _async_door_sensor_changed(self, is_open: bool) -> None:
         """Handle door sensor state changes."""
-        new_state = event.data.get("new_state")
-        if new_state:
-            self._is_door_open = new_state.state == STATE_ON
-            _LOGGER.debug(f"Door sensor {self._door_sensor} changed to: {new_state.state} (is_open={self._is_door_open})")
-            
-            if not self._is_door_open and self._pending_lock:
-                 _LOGGER.debug("Door closed and pending lock is set. Executing lock.")
-                 self.hass.async_create_task(self.async_lock())
-            
-            self.async_write_ha_state()
+        self._is_door_open = is_open
+        _LOGGER.debug(f"Door state changed to: is_open={self._is_door_open}")
+        
+        if not self._is_door_open and self._pending_lock:
+                _LOGGER.debug("Door closed and pending lock is set. Executing lock.")
+                self.hass.async_create_task(self.async_lock())
+        
+        self._start_auto_lock_timer()
+        
+        self.async_write_ha_state()
 
     @property
     def is_jammed(self) -> bool | None:
@@ -147,6 +150,7 @@ class GimdowBLELock(GimdowBLEEntity, LockEntity):
 
     async def async_lock(self, **kwargs) -> None:
         """Lock the device."""
+        self._stop_auto_lock_timer()
         _LOGGER.debug(f"Attempting to lock. is_door_open={self._is_door_open}")
         if self._is_door_open:
             _LOGGER.warning("Door is open. Setting pending lock (Jammed state) and waiting for door close.")
@@ -179,6 +183,47 @@ class GimdowBLELock(GimdowBLEEntity, LockEntity):
         )
         if datapoint:
             await datapoint.set_value(self._mapping.unlock_value)
+            self._start_auto_lock_timer()
+
+    def _start_auto_lock_timer(self) -> None:
+        """Start the auto lock timer if conditions are met."""
+        self._stop_auto_lock_timer()
+        
+        # Check virtual_auto_lock state (set by switch.py)
+        if not self._data.virtual_auto_lock:
+            return
+
+        if self._is_door_open:
+            _LOGGER.debug("Auto lock: Door is open, timer not started.")
+            return
+
+        if self.is_locked:
+            _LOGGER.debug("Auto lock: Already locked, timer not started.")
+            return
+
+        # Get delay from device DP 36 (Auto Lock Time), default to 10s
+        auto_lock_delay = 10
+        delay_dp = self._device.datapoints.get(36)
+        if delay_dp and delay_dp.value:
+            auto_lock_delay = int(delay_dp.value)
+
+        _LOGGER.debug(f"Auto lock: Starting timer for {auto_lock_delay} seconds.")
+        self._auto_lock_timer = async_call_later(
+            self.hass, auto_lock_delay, self._async_auto_lock_callback
+        )
+
+    def _stop_auto_lock_timer(self) -> None:
+        """Stop the auto lock timer."""
+        if self._auto_lock_timer:
+            self._auto_lock_timer()
+            self._auto_lock_timer = None
+            _LOGGER.debug("Auto lock: Timer stopped.")
+
+    async def _async_auto_lock_callback(self, now) -> None:
+        """Handle auto lock timer expiration."""
+        _LOGGER.debug("Auto lock: Timer expired. Locking.")
+        self._auto_lock_timer = None
+        await self.async_lock()
 
 
 async def async_setup_entry(
@@ -201,7 +246,7 @@ async def async_setup_entry(
                     data.device,
                     data.product,
                     mapping,
-                    door_sensor=entry.options.get(CONF_DOOR_SENSOR) or entry.data.get(CONF_DOOR_SENSOR),
+                    data=data,
                 )
             )
     async_add_entities(entities)
