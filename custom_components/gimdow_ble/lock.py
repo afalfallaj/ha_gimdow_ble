@@ -97,6 +97,7 @@ class GimdowBLELock(GimdowBLEEntity, LockEntity):
         self._pending_lock = False
         self._auto_lock_timer = None
         self._unlock_wait_future = None
+        self._is_unlocking = False
         _LOGGER.debug(f"GimdowBLELock initialized with data: {self._data}")
 
     async def async_added_to_hass(self) -> None:
@@ -140,14 +141,26 @@ class GimdowBLELock(GimdowBLEEntity, LockEntity):
         if self._unlock_wait_future and not self._unlock_wait_future.done():
              if self.is_locked is False:
                   self._unlock_wait_future.set_result(True)
+        
+        if self.is_locked is False:
+             self._is_unlocking = False
+
         super()._handle_coordinator_update()
 
     @property
     def is_jammed(self) -> bool | None:
         """Return true if lock is jammed (locked while open)."""
+        if self.is_unlocking:
+             return False
+
         if (self._is_door_open and self.is_locked) or self._pending_lock:
             return True
         return None
+
+    @property
+    def is_unlocking(self) -> bool:
+        """Return true if the lock is currently unlocking."""
+        return self._is_unlocking
 
 
     @property
@@ -207,6 +220,7 @@ class GimdowBLELock(GimdowBLEEntity, LockEntity):
             self._mapping.unlock_value,
         )
         if datapoint:
+            self._is_unlocking = True
             await datapoint.set_value(self._mapping.unlock_value)
             self._start_auto_lock_timer()
 
