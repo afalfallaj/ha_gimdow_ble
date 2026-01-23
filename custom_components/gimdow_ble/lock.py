@@ -269,9 +269,6 @@ class GimdowBLELock(GimdowBLEEntity, LockEntity):
             _LOGGER.debug("Auto lock: Door is open, timer not started.")
             return
 
-        if self._is_door_open:
-            _LOGGER.debug("Auto lock: Door is open, timer not started.")
-            return
 
         # Get delay from device DP 36 (Auto Lock Time), default to 10s
         auto_lock_delay = 10
