@@ -76,6 +76,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         manager,
         coordinator,
         door_update_signal=f"gimdow_door_update_{device.device_id}",
+        virtual_auto_lock_signal=f"gimdow_virtual_auto_lock_{device.device_id}",
+        virtual_auto_lock_time_signal=f"gimdow_virtual_auto_lock_time_{device.device_id}",
     )
 
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)

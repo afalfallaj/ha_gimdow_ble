@@ -16,6 +16,7 @@ from homeassistant.helpers.entity import EntityCategory
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
 from homeassistant.helpers.restore_state import RestoreEntity
+from homeassistant.helpers.dispatcher import async_dispatcher_send
 
 from .const import DOMAIN, CONF_DOOR_SENSOR
 from .devices import GimdowBLEData, GimdowBLEEntity, GimdowBLEProductInfo
@@ -134,6 +135,7 @@ class GimdowBLESwitch(GimdowBLEEntity, SwitchEntity, RestoreEntity):
                     if self._is_virtualized_auto_lock:
                         # Restore virtual state
                         self._data.virtual_auto_lock = is_on
+                        async_dispatcher_send(self.hass, self._data.virtual_auto_lock_signal)
                         # Force real DP off (so hardware doesn't lock while open)
                         self._device.datapoints.get_or_create(
                             self._mapping.dp_id,
@@ -180,6 +182,7 @@ class GimdowBLESwitch(GimdowBLEEntity, SwitchEntity, RestoreEntity):
         if self._is_virtualized_auto_lock:
              self._data.virtual_auto_lock = True
              self.async_write_ha_state()
+             async_dispatcher_send(self.hass, self._data.virtual_auto_lock_signal)
              # Ensure hardware auto-lock is OFF
              datapoint = self._device.datapoints.get_or_create(
                 self._mapping.dp_id,
@@ -221,6 +224,7 @@ class GimdowBLESwitch(GimdowBLEEntity, SwitchEntity, RestoreEntity):
         if self._is_virtualized_auto_lock:
              self._data.virtual_auto_lock = False
              self.async_write_ha_state()
+             async_dispatcher_send(self.hass, self._data.virtual_auto_lock_signal)
              # Ensure hardware auto-lock is OFF
              datapoint = self._device.datapoints.get_or_create(
                 self._mapping.dp_id,

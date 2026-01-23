@@ -23,6 +23,7 @@ from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.entity import EntityCategory
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.restore_state import RestoreEntity
+from homeassistant.helpers.dispatcher import async_dispatcher_send
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
 
 from .const import DOMAIN
@@ -113,10 +114,13 @@ class GimdowBLENumber(GimdowBLEEntity, NumberEntity, RestoreEntity):
         coordinator: DataUpdateCoordinator,
         device: GimdowBLEDevice,
         product: GimdowBLEProductInfo,
+        product: GimdowBLEProductInfo,
         mapping: GimdowBLENumberMapping,
+        data: GimdowBLEData,
     ) -> None:
         super().__init__(hass, coordinator, device, product, mapping.description)
         self._mapping = mapping
+        self._data = data
         self._attr_mode = mapping.mode
 
     async def async_added_to_hass(self) -> None:
@@ -166,6 +170,10 @@ class GimdowBLENumber(GimdowBLEEntity, NumberEntity, RestoreEntity):
         if datapoint:
             await datapoint.set_value(int_value)
 
+        # If this is the auto-lock time (DP 36), notify the lock entity
+        if self._mapping.dp_id == 36:
+            async_dispatcher_send(self.hass, self._data.virtual_auto_lock_time_signal)
+
     @property
     def available(self) -> bool:
         """Return if entity is available."""
@@ -195,6 +203,7 @@ async def async_setup_entry(
                     data.device,
                     data.product,
                     mapping,
+                    data=data,
                 )
             )
     async_add_entities(entities)

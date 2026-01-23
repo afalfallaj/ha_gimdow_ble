@@ -112,6 +112,20 @@ class GimdowBLELock(GimdowBLEEntity, LockEntity):
                 self._async_door_sensor_changed
             )
         )
+        self.async_on_remove(
+            async_dispatcher_connect(
+                self.hass,
+                self._data.virtual_auto_lock_signal,
+                self._async_virtual_auto_lock_changed
+            )
+        )
+        self.async_on_remove(
+            async_dispatcher_connect(
+                self.hass,
+                self._data.virtual_auto_lock_time_signal,
+                self._async_virtual_auto_lock_time_changed
+            )
+        )
 
         # Initialize state
         if self._data.is_door_open is not None:
@@ -134,6 +148,18 @@ class GimdowBLELock(GimdowBLEEntity, LockEntity):
         self._start_auto_lock_timer()
         
         self.async_write_ha_state()
+
+    @callback
+    def _async_virtual_auto_lock_changed(self) -> None:
+        """Handle virtual auto lock state changes."""
+        _LOGGER.debug(f"Virtual auto lock setting changed to: {self._data.virtual_auto_lock}")
+        self._start_auto_lock_timer()
+
+    @callback
+    def _async_virtual_auto_lock_time_changed(self) -> None:
+        """Handle virtual auto lock time changes."""
+        _LOGGER.debug(f"Virtual auto lock time setting changed.")
+        self._start_auto_lock_timer()
 
     @callback
     def _handle_coordinator_update(self) -> None:
@@ -228,8 +254,11 @@ class GimdowBLELock(GimdowBLEEntity, LockEntity):
         """Start the auto lock timer if conditions are met."""
         self._stop_auto_lock_timer()
         
+        _LOGGER.debug(f"Auto lock: Checking conditions. virtual_auto_lock={self._data.virtual_auto_lock}, is_door_open={self._is_door_open}, is_locked={self.is_locked}")
+        
         # Check virtual_auto_lock state (set by switch.py)
         if not self._data.virtual_auto_lock:
+            _LOGGER.debug("Auto lock: Virtual auto lock is disabled.")
             return
 
         if self._is_door_open:

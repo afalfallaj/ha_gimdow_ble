@@ -320,6 +320,8 @@ class GimdowBLEData:
     coordinator: GimdowBLECoordinator
     coordinator: GimdowBLECoordinator
     door_update_signal: str
+    virtual_auto_lock_signal: str
+    virtual_auto_lock_time_signal: str
     virtual_auto_lock: bool = False
     is_door_open: bool | None = None
 
