@@ -170,6 +170,10 @@ class GimdowBLELock(GimdowBLEEntity, LockEntity):
         
         if self.is_locked is False:
              self._is_unlocking = False
+        
+        if self._data.virtual_auto_lock and not self.is_locked and not self._is_door_open and self._auto_lock_timer is None:
+             _LOGGER.debug("Auto lock: Detected unlocked state with no active timer. Starting timer.")
+             self._start_auto_lock_timer()
 
         super()._handle_coordinator_update()
 
@@ -265,8 +269,8 @@ class GimdowBLELock(GimdowBLEEntity, LockEntity):
             _LOGGER.debug("Auto lock: Door is open, timer not started.")
             return
 
-        if self.is_locked:
-            _LOGGER.debug("Auto lock: Already locked, timer not started.")
+        if self._is_door_open:
+            _LOGGER.debug("Auto lock: Door is open, timer not started.")
             return
 
         # Get delay from device DP 36 (Auto Lock Time), default to 10s
@@ -289,8 +293,13 @@ class GimdowBLELock(GimdowBLEEntity, LockEntity):
 
     async def _async_auto_lock_callback(self, now) -> None:
         """Handle auto lock timer expiration."""
-        _LOGGER.debug("Auto lock: Timer expired. Locking.")
         self._auto_lock_timer = None
+        
+        if self.is_locked:
+             _LOGGER.debug("Auto lock: Timer expired, but lock is already locked. skipping.")
+             return
+             
+        _LOGGER.debug("Auto lock: Timer expired. Locking.")
         await self.async_lock()
 
 
