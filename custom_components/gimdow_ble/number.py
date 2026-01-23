@@ -114,7 +114,6 @@ class GimdowBLENumber(GimdowBLEEntity, NumberEntity, RestoreEntity):
         coordinator: DataUpdateCoordinator,
         device: GimdowBLEDevice,
         product: GimdowBLEProductInfo,
-        product: GimdowBLEProductInfo,
         mapping: GimdowBLENumberMapping,
         data: GimdowBLEData,
     ) -> None:
