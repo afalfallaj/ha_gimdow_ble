@@ -18,7 +18,7 @@ from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.const import STATE_ON, STATE_OFF
 
-from .const import DOMAIN
+from .const import DOMAIN, ACTION_SOURCE_AUTO, ACTION_SOURCE_HA
 from .devices import GimdowBLEData, GimdowBLEEntity, GimdowBLEProductInfo
 from .gimdow_ble import GimdowBLEDataPointType, GimdowBLEDevice
 
@@ -98,6 +98,12 @@ class GimdowBLELock(GimdowBLEEntity, LockEntity):
         self._auto_lock_timer = None
         self._unlock_wait_future = None
         self._is_unlocking = False
+        
+        # Attribution tracking
+        self._pending_action_source = None
+        self._last_is_locked = None
+        self._attr_changed_by = None
+
         _LOGGER.debug(f"GimdowBLELock initialized with data: {self._data}")
 
     async def async_added_to_hass(self) -> None:
@@ -175,7 +181,26 @@ class GimdowBLELock(GimdowBLEEntity, LockEntity):
              _LOGGER.debug("Auto lock: Detected unlocked state with no active timer. Starting timer.")
              self._start_auto_lock_timer()
 
+        self._update_attribution()
+
         super()._handle_coordinator_update()
+
+    def _update_attribution(self) -> None:
+        """Update the changed_by attribute based on recent actions."""
+        current_is_locked = self.is_locked
+        if self._last_is_locked is not None and current_is_locked != self._last_is_locked:
+             _LOGGER.debug(f"Attribution: State changed. Pending source: {self._pending_action_source}")
+             if self._pending_action_source == ACTION_SOURCE_AUTO:
+                  self._attr_changed_by = "Auto Lock"
+             elif self._pending_action_source == ACTION_SOURCE_HA:
+                  self._attr_changed_by = None
+             else:
+                  self._attr_changed_by = "Manual"
+             
+             _LOGGER.debug(f"Attribution: Set changed_by to '{self._attr_changed_by}'")
+             self._pending_action_source = None
+        
+        self._last_is_locked = current_is_locked
 
     @property
     def is_jammed(self) -> bool | None:
@@ -228,6 +253,10 @@ class GimdowBLELock(GimdowBLEEntity, LockEntity):
         
         self._pending_lock = False # Clear pending if we are proceeding
 
+        if self._pending_action_source != ACTION_SOURCE_AUTO:
+             _LOGGER.debug(f"Attribution: Lock requested via HA (source was {self._pending_action_source}). Setting source to HA.")
+             self._pending_action_source = ACTION_SOURCE_HA
+
         datapoint = self._device.datapoints.get_or_create(
             self._mapping.lock_dp_id,
             GimdowBLEDataPointType.DT_BOOL,
@@ -251,6 +280,8 @@ class GimdowBLELock(GimdowBLEEntity, LockEntity):
         )
         if datapoint:
             self._is_unlocking = True
+            _LOGGER.debug("Attribution: Unlock requested via HA. Setting source to HA.")
+            self._pending_action_source = ACTION_SOURCE_HA
             await datapoint.set_value(self._mapping.unlock_value)
             self._start_auto_lock_timer()
 
@@ -297,6 +328,8 @@ class GimdowBLELock(GimdowBLEEntity, LockEntity):
              return
              
         _LOGGER.debug("Auto lock: Timer expired. Locking.")
+        _LOGGER.debug("Attribution: Setting source to AUTO_LOCK.")
+        self._pending_action_source = ACTION_SOURCE_AUTO
         await self.async_lock()
 
 

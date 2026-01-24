@@ -25,6 +25,9 @@ CONF_FUNCTIONS: Final = "functions"
 CONF_STATUS_RANGE: Final = "status_range"
 CONF_DOOR_SENSOR: Final = "door_sensor"
 
+ACTION_SOURCE_AUTO: Final = "auto_lock"
+ACTION_SOURCE_HA: Final = "ha"
+
 
 CONF_AUTH_TYPE: Final = "auth_type"
 
