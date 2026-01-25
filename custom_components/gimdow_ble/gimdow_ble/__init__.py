@@ -4,7 +4,7 @@ from .const import GimdowBLEDataPointType, SERVICE_UUID
 from .gimdow_ble import GimdowBLEDataPoint, GimdowBLEDevice
 from .manager import AbstaractGimdowBLEDeviceManager, GimdowBLEDeviceCredentials
 
-__version__ = "1.2.3"
+__version__ = "1.2.4"
 
 __all__ = [
     "AbstaractGimdowBLEDeviceManager",

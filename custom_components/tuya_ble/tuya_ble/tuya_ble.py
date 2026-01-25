@@ -696,12 +696,12 @@ class GimdowBLEDevice:
                     )
                     continue
                 except BLEAK_EXCEPTIONS:
-                    _LOGGER.debug(
+                    _LOGGER.error(
                         "%s: communication failed", self.address, exc_info=True
                     )
                     continue
                 except:
-                    _LOGGER.debug("%s: unexpected error",
+                    _LOGGER.error("%s: unexpected error",
                                   self.address, exc_info=True)
                     continue
 

@@ -678,7 +678,7 @@ class GimdowBLEDevice:
                         ble_device_callback=lambda: self._ble_device,
                     )
             except BLEAK_EXCEPTIONS as ex:
-                _LOGGER.debug(
+                _LOGGER.error(
                     "%s: communication failed: %s", self.address, ex
                 )
                 return # Let the loop/caller handle retry if needed, or just fail this attempt
