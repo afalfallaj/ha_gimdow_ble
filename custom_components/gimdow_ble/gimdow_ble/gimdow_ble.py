@@ -563,6 +563,31 @@ class GimdowBLEDevice:
             return not bool(datapoint.value)
         return None
 
+    async def _send_control_datapoint_wait_for_echo(self, dp_id: int, value: Any, timeout: float = 10.0) -> bool:
+        """Send a control datapoint and wait for the device to echo it back."""
+        future_echo = asyncio.get_running_loop().create_future()
+        
+        def _echo_callback(datapoints: list[GimdowBLEDataPoint]):
+                for dp in datapoints:
+                    if dp.id == dp_id:
+                        if not future_echo.done():
+                            future_echo.set_result(True)
+        
+        remove_callback = self.register_callback(_echo_callback)
+        try:
+            await self.send_control_datapoint(dp_id, value)
+            await asyncio.wait_for(future_echo, timeout=timeout)
+            _LOGGER.debug(f"{self.address}: Control datapoint {dp_id} echoed by device.")
+            return True
+        except asyncio.TimeoutError:
+                _LOGGER.warning(f"{self.address}: Timed out waiting for control datapoint {dp_id} echo.")
+                return False
+        except Exception as e:
+                _LOGGER.error(f"{self.address}: Error waiting for control datapoint {dp_id} echo: {e}")
+                return False
+        finally:
+                remove_callback()
+
     async def resolve_unknown_state(
         self,
         unlock_dp_id: int,
@@ -585,7 +610,11 @@ class GimdowBLEDevice:
 
         try:
             # 1. Send First Unlock
-            await self.send_control_datapoint(unlock_dp_id, unlock_value)
+            # Wait for echo first to confirm receipt
+            result = await self._send_control_datapoint_wait_for_echo(unlock_dp_id, unlock_value)
+            if not result:
+                 _LOGGER.warning(f"{self.address}: Proceeding despite missing echo for First Unlock.")
+
 
             # 2. Wait for state to become Unlocked
             future = asyncio.get_running_loop().create_future()
@@ -618,28 +647,13 @@ class GimdowBLEDevice:
 
             # 3. Send Second Unlock
             # Wait for the device to echo the unlock command (confirmation)
-            future_unlock_echo = asyncio.get_running_loop().create_future()
-            
-            def _unlock_echo_callback(datapoints: list[GimdowBLEDataPoint]):
-                 for dp in datapoints:
-                     if dp.id == unlock_dp_id:
-                         # We just want to know the device processed it.
-                         # Usually it echoes the same value we sent.
-                         if not future_unlock_echo.done():
-                             future_unlock_echo.set_result(True)
+            result = await self._send_control_datapoint_wait_for_echo(unlock_dp_id, unlock_value)
+            if not result:
+                  _LOGGER.warning(f"{self.address}: Proceeding despite missing echo for Second Unlock.")
 
-            remove_unlock_callback = self.register_callback(_unlock_echo_callback)
-            
-            try:
-                await self.send_control_datapoint(unlock_dp_id, unlock_value)
-                await asyncio.wait_for(future_unlock_echo, timeout=30)
-                _LOGGER.debug(f"{self.address}: Unlock command echoes by device.")
-            except asyncio.TimeoutError:
-                 _LOGGER.warning(f"{self.address}: Timed out waiting for Unlock command echo. Proceeding anyway.")
-            except Exception as e:
-                 _LOGGER.error(f"{self.address}: Error waiting for Unlock echo: {e}")
-            finally:
-                 remove_unlock_callback()
+            # Wait for mechanical cycle to complete
+            _LOGGER.debug(f"{self.address}: Waiting for mechanical unlock cycle...")
+            # await asyncio.sleep(3)
 
             # 4. Lock if requested
             if target_lock and lock_dp_id is not None:
