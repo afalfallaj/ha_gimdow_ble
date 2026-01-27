@@ -653,7 +653,7 @@ class GimdowBLEDevice:
 
             # Wait for mechanical cycle to complete
             _LOGGER.debug(f"{self.address}: Waiting for mechanical unlock cycle...")
-            # await asyncio.sleep(3)
+            await asyncio.sleep(3)
 
             # 4. Lock if requested
             if target_lock and lock_dp_id is not None:
