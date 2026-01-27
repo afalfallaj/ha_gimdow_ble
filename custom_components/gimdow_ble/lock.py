@@ -230,10 +230,7 @@ class GimdowBLELock(GimdowBLEEntity, LockEntity):
     @property
     def is_locked(self) -> bool | None:
         """Return true if lock is locked."""
-        datapoint = self._device.datapoints[self._mapping.state_dp_id]
-        if datapoint:
-            return not bool(datapoint.value)
-        return None
+        return self._device.get_lock_state(self._mapping.state_dp_id)
 
 
 
