@@ -604,7 +604,7 @@ class GimdowBLEDevice:
             # Actually, we just sent unlock command. We should see an update.
             # But if it was already unlocked, maybe we missed the update?
             # We should check current value too.
-            current_dp = self._datapoints.get(state_dp_id)
+            current_dp = self._datapoints[state_dp_id]
             if current_dp and bool(current_dp.value):
                  _LOGGER.debug(f"{self.address}: State is already Unlocked. Future set immediately.")
                  future.set_result(True)
