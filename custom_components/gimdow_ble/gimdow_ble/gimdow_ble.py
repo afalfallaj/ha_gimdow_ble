@@ -534,6 +534,99 @@ class GimdowBLEDevice:
         value: bytes | bool | int | str | None = None,
     ) -> GimdowBLEDataPoint:
         """Get datapoints exposed by device."""
+        return self._datapoints.get_or_create(id, type, value)
+
+    async def send_control_datapoint(self, dp_id: int, value: Any) -> GimdowBLEDataPoint:
+         """Send a control datapoint command (lock/unlock)."""
+         datapoint = self.get_or_create_datapoint(
+             dp_id,
+             GimdowBLEDataPointType.DT_BOOL,
+             value,
+         )
+         await datapoint.set_value(value)
+         return datapoint
+
+    async def resolve_unknown_state(
+        self,
+        unlock_dp_id: int,
+        unlock_value: Any,
+        state_dp_id: int,
+        lock_dp_id: int | None = None,
+        lock_value: Any | None = None,
+        target_lock: bool = False,
+    ) -> None:
+        """
+        Handle unlocking sequence when state is unknown.
+        Sequence: Unlock -> Wait for state update -> Unlock -> Lock (if target_lock)
+        """
+        _LOGGER.debug(f"{self.address}: resolve_unknown_state called. Target: {'LOCK' if target_lock else 'UNLOCK'}")
+
+        # 1. Send First Unlock
+        await self.send_control_datapoint(unlock_dp_id, unlock_value)
+
+
+        # 2. Wait for state to become Unlocked
+        # We need to wait for state_dp_id to become False (if boolean) or whatever "Unlocked" means.
+        # Usually unlocked is 'not bool(value)' being True => value is False (0).
+        
+        future = asyncio.get_running_loop().create_future()
+
+        def _state_callback(datapoints: list[GimdowBLEDataPoint]):
+             for dp in datapoints:
+                 if dp.id == state_dp_id:
+                     # Check if unlocked (value should be falsy/0 for unlocked usually, but we should verify logic)
+                     # In lock.py: is_locked = not bool(datapoint.value)
+                     # So Unlocked (is_locked=False) means datapoint.value is TRUE?
+                     # Wait, lock.py says: return not bool(datapoint.value)
+                     # If datapoint.value is 1 (True) -> is_locked is False -> Unlocked
+                     # If datapoint.value is 0 (False) -> is_locked is True -> Locked
+                     # CHECK lock.py again:
+                     # lock_value=True implies locking.
+                     # unlock_value=True implies unlocking.
+                     # state_dp_id=47.
+                     # Let's check logic in lock.py again to be sure.
+                     
+                     # Re-reading lock.py:
+                     #     datapoint = self._device.datapoints[self._mapping.state_dp_id]
+                     #     if datapoint:
+                     #         return not bool(datapoint.value)
+                     # So if value is 1 (True), is_locked = False (Unlocked).
+                     # If value is 0 (False), is_locked = True (Locked).
+                     
+                     if bool(dp.value): # This means Unlocked
+                         if not future.done():
+                             future.set_result(True)
+
+        remove_callback = self.register_callback(_state_callback)
+        
+        try:
+            # Check if already unlocked?
+            # Actually, we just sent unlock command. We should see an update.
+            # But if it was already unlocked, maybe we missed the update?
+            # We should check current value too.
+            current_dp = self._datapoints.get(state_dp_id)
+            if current_dp and bool(current_dp.value):
+                 _LOGGER.debug(f"{self.address}: State is already Unlocked. Future set immediately.")
+                 future.set_result(True)
+            
+            await asyncio.wait_for(future, timeout=60)
+            _LOGGER.debug(f"{self.address}: Unlocked state confirmed.")
+        except asyncio.TimeoutError:
+             _LOGGER.warning(f"{self.address}: Timed out waiting for Unlocked state.")
+        except Exception as e:
+             _LOGGER.error(f"{self.address}: Error waiting for state: {e}")
+        finally:
+             remove_callback()
+
+        # 3. Send Second Unlock
+        await self.send_control_datapoint(unlock_dp_id, unlock_value)
+        
+        # 4. Lock if requested
+        if target_lock and lock_dp_id is not None:
+             _LOGGER.debug(f"{self.address}: Sending Lock command.")
+             await self.send_control_datapoint(lock_dp_id, lock_value)
+
+
 
     def _fire_connected_callbacks(self) -> None:
         """Fire the callbacks."""

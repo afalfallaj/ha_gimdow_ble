@@ -98,6 +98,8 @@ class GimdowBLELock(GimdowBLEEntity, LockEntity):
         self._auto_lock_timer = None
         self._unlock_wait_future = None
         self._is_unlocking = False
+        self._is_locking = False
+        self._resolution_task: asyncio.Task | None = None
         
         # Attribution tracking
         self._pending_action_source = None
@@ -170,13 +172,15 @@ class GimdowBLELock(GimdowBLEEntity, LockEntity):
     @callback
     def _handle_coordinator_update(self) -> None:
         """Handle updated data from the coordinator."""
-        if self._unlock_wait_future and not self._unlock_wait_future.done():
-             if self.is_locked is False:
-                  self._unlock_wait_future.set_result(True)
-        
         if self.is_locked is False:
              self._is_unlocking = False
+             # self._is_locking = False # Don't clear locking flag here, as we might be in the middle of a lock sequence (Unknown -> Unlock -> Lock)
         
+        if self.is_locked is True:
+             self._is_locking = False
+             # self._is_unlocking = False # Don't clear unlocking flag here? Usually if locked, we are done unlocking.
+
+
         if self._data.virtual_auto_lock and not self.is_locked and not self._is_door_open and self._auto_lock_timer is None:
              _LOGGER.debug("Auto lock: Detected unlocked state with no active timer. Starting timer.")
              self._start_auto_lock_timer()
@@ -213,6 +217,11 @@ class GimdowBLELock(GimdowBLEEntity, LockEntity):
         return None
 
     @property
+    def is_locking(self) -> bool:
+        """Return true if the lock is currently locking."""
+        return self._is_locking
+
+    @property
     def is_unlocking(self) -> bool:
         """Return true if the lock is currently unlocking."""
         return self._is_unlocking
@@ -226,24 +235,54 @@ class GimdowBLELock(GimdowBLEEntity, LockEntity):
             return not bool(datapoint.value)
         return None
 
+
+
+    async def _resolve_unknown_state(self, target_lock: bool) -> None:
+        """Handle unlocking sequence when state is unknown in background."""
+        _LOGGER.warning(f"Lock state is Unknown. Initiating force unlock sequence. Target: {'LOCK' if target_lock else 'UNLOCK'}")
+        
+        if target_lock:
+             self._is_locking = True
+        else:
+             self._is_unlocking = True
+        self.async_write_ha_state()
+
+        try:
+             await self._device.resolve_unknown_state(
+                 unlock_dp_id=self._mapping.unlock_dp_id,
+                 unlock_value=self._mapping.unlock_value,
+                 state_dp_id=self._mapping.state_dp_id,
+                 lock_dp_id=self._mapping.lock_dp_id if target_lock else None,
+                 lock_value=self._mapping.lock_value if target_lock else None,
+                 target_lock=target_lock
+             )
+        except asyncio.CancelledError:
+             _LOGGER.debug("Unknown state resolution task was cancelled.")
+             raise
+        except Exception as e:
+             _LOGGER.error(f"Error calling device resolve_unknown_state: {e}")
+        finally:
+             if target_lock:
+                  self._is_locking = False
+             else:
+                  self._is_unlocking = False
+                  self._start_auto_lock_timer()
+             self.async_write_ha_state()
+
+
     async def async_lock(self, **kwargs) -> None:
         """Lock the device."""
         self._stop_auto_lock_timer()
         _LOGGER.debug(f"Attempting to lock. is_door_open={self._is_door_open}")
 
         if self.is_locked is None:
-            _LOGGER.warning("Lock state is Unknown. Trying to UNLOCK first to ensure mechanical state.")
-            self._unlock_wait_future = self.hass.loop.create_future()
-            await self.async_unlock()
-            try:
-                await asyncio.wait_for(self._unlock_wait_future, timeout=10)
-                _LOGGER.debug("Device confirmed UNLOCKED. Proceeding to LOCK.")
-            except asyncio.TimeoutError:
-                _LOGGER.error("Timed out waiting for device to report UNLOCKED state. Aborting lock to prevent jamming.")
-                self._unlock_wait_future = None
-                return
-            finally:
-                self._unlock_wait_future = None
+             if self._resolution_task and not self._resolution_task.done():
+                 _LOGGER.debug("Unknown state resolution already in progress. Ignoring duplicate request.")
+                 return
+
+             _LOGGER.warning("Lock state is Unknown. Starting background resolution task.")
+             self._resolution_task = self.hass.async_create_task(self._resolve_unknown_state(target_lock=True))
+             return
 
         if self._is_door_open:
             _LOGGER.warning("Door is open. Setting pending lock (Jammed state) and waiting for door close.")
@@ -252,18 +291,19 @@ class GimdowBLELock(GimdowBLEEntity, LockEntity):
             return
         
         self._pending_lock = False # Clear pending if we are proceeding
+        self._is_locking = True
+        self.async_write_ha_state() # Update state to Locking
 
-        if self._pending_action_source != ACTION_SOURCE_AUTO:
-             _LOGGER.debug(f"Attribution: Lock requested via HA (source was {self._pending_action_source}). Setting source to HA.")
-             self._pending_action_source = ACTION_SOURCE_HA
-
-        datapoint = self._device.datapoints.get_or_create(
+        datapoint = await self._device.send_control_datapoint(
             self._mapping.lock_dp_id,
-            GimdowBLEDataPointType.DT_BOOL,
-            self._mapping.lock_value,
+            self._mapping.lock_value
         )
+
         if datapoint:
-            await datapoint.set_value(self._mapping.lock_value)
+             if self._pending_action_source != ACTION_SOURCE_AUTO:
+                  _LOGGER.debug(f"Attribution: Lock requested via HA (source was {self._pending_action_source}). Setting source to HA.")
+                  self._pending_action_source = ACTION_SOURCE_HA
+
 
     async def async_unlock(self, **kwargs) -> None:
         """Unlock the device."""
@@ -273,17 +313,27 @@ class GimdowBLELock(GimdowBLEEntity, LockEntity):
              self.async_write_ha_state()
              return
 
-        datapoint = self._device.datapoints.get_or_create(
+        if self.is_locked is None:
+             if self._resolution_task and not self._resolution_task.done():
+                 _LOGGER.debug("Unknown state resolution already in progress. Ignoring duplicate request.")
+                 return
+
+             _LOGGER.warning("Lock state is Unknown. Starting background resolution task.")
+             self._resolution_task = self.hass.async_create_task(self._resolve_unknown_state(target_lock=False))
+             return
+
+        self._is_unlocking = True
+        self.async_write_ha_state()
+        
+        datapoint = await self._device.send_control_datapoint(
             self._mapping.unlock_dp_id,
-            GimdowBLEDataPointType.DT_BOOL,
-            self._mapping.unlock_value,
+            self._mapping.unlock_value
         )
+        
         if datapoint:
-            self._is_unlocking = True
-            _LOGGER.debug("Attribution: Unlock requested via HA. Setting source to HA.")
-            self._pending_action_source = ACTION_SOURCE_HA
-            await datapoint.set_value(self._mapping.unlock_value)
-            self._start_auto_lock_timer()
+             _LOGGER.debug("Attribution: Unlock requested via HA. Setting source to HA.")
+             self._pending_action_source = ACTION_SOURCE_HA
+             self._start_auto_lock_timer()
 
     def _start_auto_lock_timer(self) -> None:
         """Start the auto lock timer if conditions are met."""
