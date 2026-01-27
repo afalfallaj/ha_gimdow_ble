@@ -617,8 +617,30 @@ class GimdowBLEDevice:
                  remove_callback()
 
             # 3. Send Second Unlock
-            await self.send_control_datapoint(unlock_dp_id, unlock_value)
+            # Wait for the device to echo the unlock command (confirmation)
+            future_unlock_echo = asyncio.get_running_loop().create_future()
             
+            def _unlock_echo_callback(datapoints: list[GimdowBLEDataPoint]):
+                 for dp in datapoints:
+                     if dp.id == unlock_dp_id:
+                         # We just want to know the device processed it.
+                         # Usually it echoes the same value we sent.
+                         if not future_unlock_echo.done():
+                             future_unlock_echo.set_result(True)
+
+            remove_unlock_callback = self.register_callback(_unlock_echo_callback)
+            
+            try:
+                await self.send_control_datapoint(unlock_dp_id, unlock_value)
+                await asyncio.wait_for(future_unlock_echo, timeout=30)
+                _LOGGER.debug(f"{self.address}: Unlock command echoes by device.")
+            except asyncio.TimeoutError:
+                 _LOGGER.warning(f"{self.address}: Timed out waiting for Unlock command echo. Proceeding anyway.")
+            except Exception as e:
+                 _LOGGER.error(f"{self.address}: Error waiting for Unlock echo: {e}")
+            finally:
+                 remove_unlock_callback()
+
             # 4. Lock if requested
             if target_lock and lock_dp_id is not None:
                  _LOGGER.debug(f"{self.address}: Sending Lock command.")
@@ -640,7 +662,7 @@ class GimdowBLEDevice:
                      await self.send_control_datapoint(lock_dp_id, lock_value)
                      
                      # We expect the state to change to Locked
-                     await asyncio.wait_for(future_lock, timeout=60)
+                     await asyncio.wait_for(future_lock, timeout=75)
                      _LOGGER.debug(f"{self.address}: Locked state confirmed (Phase 2).")
                  except asyncio.TimeoutError:
                       _LOGGER.warning(f"{self.address}: Timed out waiting for Locked state in Phase 2.")
