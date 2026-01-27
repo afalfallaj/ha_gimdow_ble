@@ -556,7 +556,7 @@ class GimdowBLEDevice:
         if self._is_resolving:
             return None
 
-        datapoint = self._datapoints.get(state_dp_id)
+        datapoint = self._datapoints[state_dp_id]
         if datapoint:
             # Value True (1) -> Unlocked -> is_locked = False
             # Value False (0) -> Locked -> is_locked = True
@@ -602,7 +602,7 @@ class GimdowBLEDevice:
             
             try:
                 # Check current value first
-                current_dp = self._datapoints.get(state_dp_id)
+                current_dp = self._datapoints[state_dp_id]
                 if current_dp and bool(current_dp.value):
                      _LOGGER.debug(f"{self.address}: State is already Unlocked. Future set immediately.")
                      future.set_result(True)
