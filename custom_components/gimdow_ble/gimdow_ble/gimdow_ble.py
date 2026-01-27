@@ -648,7 +648,8 @@ class GimdowBLEDevice:
             # Disconnect to reset position awareness
             _LOGGER.debug(f"{self.address}: Disconnecting to reset lock position awareness.")
             await self._execute_disconnect()
-            await asyncio.sleep(10)
+            await asyncio.sleep(1)
+            self._expected_disconnect = False
 
             # 3. Send Second Unlock
             # Wait for the device to echo the unlock command (confirmation)
