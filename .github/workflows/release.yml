@@ -1,0 +1,60 @@
+name: Release
+
+on:
+  push:
+    branches:
+      - main
+      - dev
+    paths-ignore:
+      - '.github/workflows/**'
+      - 'README.md'
+      - 'LICENSE'
+
+jobs:
+  release:
+    if: "!contains(github.event.head_commit.message, '[skip ci]')"
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+
+      - name: Determine current branch
+        id: branch
+        run: echo "branch=${GITHUB_REF##*/}" >> $GITHUB_OUTPUT
+
+      - name: Bump Version
+        id: bump
+        run: |
+          NEW_VERSION=$(python3 .github/scripts/update_version.py custom_components/gimdow_ble/manifest.json custom_components/gimdow_ble/gimdow_ble/__init__.py ${{ steps.branch.outputs.branch }})
+          echo "New version: $NEW_VERSION"
+          echo "version=$NEW_VERSION" >> $GITHUB_OUTPUT
+
+      - name: Commit & Push Changes
+        if: steps.bump.outputs.version != ''
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          git add custom_components/gimdow_ble/manifest.json custom_components/gimdow_ble/gimdow_ble/__init__.py
+          git commit -m "chore(release): bump version to ${{ steps.bump.outputs.version }} [skip ci]"
+          git push
+
+      - name: Create Release
+        if: steps.bump.outputs.version != ''
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: v${{ steps.bump.outputs.version }}
+          name: Release v${{ steps.bump.outputs.version }}
+          generate_release_notes: true
+          prerelease: ${{ steps.branch.outputs.branch == 'dev' }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
