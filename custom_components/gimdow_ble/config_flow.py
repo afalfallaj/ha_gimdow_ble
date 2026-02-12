@@ -17,7 +17,6 @@ from homeassistant.config_entries import (
 from homeassistant.components.bluetooth import (
     BluetoothServiceInfoBleak,
     async_discovered_service_info,
-    async_get_scanner_names,
 )
 from homeassistant.const import (
     CONF_ADDRESS,
@@ -186,7 +185,7 @@ def _get_options_schema(hass: HomeAssistant, defaults: dict[str, Any] | None = N
     defaults = defaults or {}
     schema = {}
 
-    adapters = [adapter for adapter in async_get_scanner_names(hass)]
+    adapters = list(set([service_info.source for service_info in async_discovered_service_info(hass)]))
     
     schema[vol.Optional(
         CONF_ADAPTER,
