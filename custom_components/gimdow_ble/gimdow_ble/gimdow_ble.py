@@ -933,6 +933,8 @@ class GimdowBLEDevice:
             await self._ensure_connected()
             if self._expected_disconnect:
                 return
+            if not self._client or not self._client.is_connected:
+                raise BleakError("Failed to ensure connection")
             _LOGGER.debug("%s: Reconnect, connection ensured", self.address)
         except BLEAK_EXCEPTIONS:  # BleakNotFoundError:
             _LOGGER.debug(
@@ -1505,13 +1507,21 @@ class GimdowBLEDevice:
         packet_num, pos = self._unpack_int(data, pos)
 
         if packet_num < self._input_expected_packet_num:
-            _LOGGER.error(
-                "%s: Unexpcted packet (number %s) in notifications, " "expected %s",
-                self.address,
-                packet_num,
-                self._input_expected_packet_num,
-            )
-            self._clean_input()
+            if packet_num == 0:
+                _LOGGER.debug(
+                    "%s: Received packet 0 while expecting %s, resetting input buffer",
+                    self.address,
+                    self._input_expected_packet_num,
+                )
+                self._clean_input()
+            else:
+                _LOGGER.error(
+                    "%s: Unexpcted packet (number %s) in notifications, " "expected %s",
+                    self.address,
+                    packet_num,
+                    self._input_expected_packet_num,
+                )
+                self._clean_input()
 
         if packet_num == self._input_expected_packet_num:
             if packet_num == 0:

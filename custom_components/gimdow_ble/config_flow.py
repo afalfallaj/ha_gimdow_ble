@@ -17,6 +17,7 @@ from homeassistant.config_entries import (
 from homeassistant.components.bluetooth import (
     BluetoothServiceInfoBleak,
     async_discovered_service_info,
+    async_get_scanner_names,
 )
 from homeassistant.const import (
     CONF_ADDRESS,
@@ -53,6 +54,7 @@ from .const import (
     CONF_STATUS_RANGE,
     CONF_UUID,
     CONF_DOOR_SENSOR,
+    CONF_ADAPTER,
     DOMAIN,
     SMARTLIFE_APP,
     TUYA_COUNTRIES,
@@ -179,10 +181,23 @@ def _show_login_form(
     )
 
 
-def _get_options_schema(defaults: dict[str, Any] | None = None) -> vol.Schema:
+def _get_options_schema(hass: HomeAssistant, defaults: dict[str, Any] | None = None) -> vol.Schema:
     """Return the options schema with optional defaults."""
     defaults = defaults or {}
     schema = {}
+
+    adapters = [adapter for adapter in async_get_scanner_names(hass)]
+    
+    schema[vol.Optional(
+        CONF_ADAPTER,
+        description={"suggested_value": defaults.get(CONF_ADAPTER)}
+    )] = SelectSelector(
+        SelectSelectorConfig(
+            options=adapters,
+            mode=SelectSelectorMode.DROPDOWN,
+            custom_value=False,
+        )
+    )
     
     schema[vol.Optional(
         CONF_DOOR_SENSOR,
@@ -205,13 +220,15 @@ class GimdowBLEOptionsFlow(OptionsFlowWithReload):
             # Handle clearing of optional fields
             if CONF_DOOR_SENSOR not in user_input:
                 user_input[CONF_DOOR_SENSOR] = None
+            if CONF_ADAPTER not in user_input:
+                user_input[CONF_ADAPTER] = None
 
             options = {**self.config_entry.options, **user_input}
             return self.async_create_entry(title="", data=options)
 
         return self.async_show_form(
             step_id="init",
-            data_schema=_get_options_schema(self.config_entry.options),
+            data_schema=_get_options_schema(self.hass, self.config_entry.options),
         )
 
 

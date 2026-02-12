@@ -15,7 +15,7 @@ from homeassistant.exceptions import ConfigEntryNotReady
 from .gimdow_ble import GimdowBLEDevice
 
 from .cloud import HASSGimdowBLEDeviceManager
-from .const import DOMAIN
+from .const import CONF_ADAPTER, DOMAIN
 from .devices import GimdowBLECoordinator, GimdowBLEData, get_device_product_info
 
 PLATFORMS: list[Platform] = [
@@ -56,6 +56,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         change: bluetooth.BluetoothChange,
     ) -> None:
         """Update from a ble callback."""
+        if (adapter := entry.options.get(CONF_ADAPTER)) and service_info.source != adapter:
+            return
+
         device.set_ble_device_and_advertisement_data(
             service_info.device, service_info.advertisement
         )
