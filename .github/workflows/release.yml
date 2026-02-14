@@ -47,7 +47,9 @@ jobs:
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
           git add custom_components/gimdow_ble/manifest.json custom_components/gimdow_ble/gimdow_ble/__init__.py
           git commit -m "chore(release): bump version to ${{ steps.bump.outputs.version }} [skip ci]"
+          git tag v${{ steps.bump.outputs.version }}
           git push
+          git push origin v${{ steps.bump.outputs.version }}
 
       - name: Create Release
         if: steps.bump.outputs.version != ''
