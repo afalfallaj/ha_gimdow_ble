@@ -792,6 +792,7 @@ class GimdowBLEDevice:
 
     async def _execute_disconnect(self) -> None:
         """Execute disconnection."""
+        _LOGGER.debug(f"{self.address}: Executing disconnect.")
         async with self._connect_lock:
             client = self._client
             self._expected_disconnect = True

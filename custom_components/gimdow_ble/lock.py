@@ -263,6 +263,7 @@ class GimdowBLELock(GimdowBLEEntity, LockEntity):
                   # Ensure we reset the correct flag based on target
                   pass
              
+             _LOGGER.debug(f"Unknown state resolution finished. Resetting locking/unlocking flags. Target was: {'LOCK' if target_lock else 'UNLOCK'}")
              self._is_locking = False
              self._is_unlocking = False
              
