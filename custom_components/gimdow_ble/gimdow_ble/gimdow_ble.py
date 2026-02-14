@@ -580,7 +580,8 @@ class GimdowBLEDevice:
             _LOGGER.debug(f"{self.address}: Control datapoint {dp_id} echoed by device.")
             return True
         except asyncio.TimeoutError:
-                _LOGGER.warning(f"{self.address}: Timed out waiting for control datapoint {dp_id} echo.")
+                _LOGGER.warning(f"{self.address}: Timed out waiting for control datapoint {dp_id} echo. Disconnecting to force reconnect.")
+                await self._execute_disconnect()
                 return False
         except Exception as e:
                 _LOGGER.error(f"{self.address}: Error waiting for control datapoint {dp_id} echo: {e}")
@@ -613,7 +614,8 @@ class GimdowBLEDevice:
             # Wait for echo first to confirm receipt
             result = await self._send_control_datapoint_wait_for_echo(unlock_dp_id, unlock_value)
             if not result:
-                 _LOGGER.warning(f"{self.address}: Proceeding despite missing echo for First Unlock.")
+                 _LOGGER.warning(f"{self.address}: Missing echo for First Unlock. Aborting resolution sequence.")
+                 return
 
 
             # 2. Wait for state to become Unlocked

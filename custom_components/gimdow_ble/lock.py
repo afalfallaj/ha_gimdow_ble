@@ -260,9 +260,13 @@ class GimdowBLELock(GimdowBLEEntity, LockEntity):
              _LOGGER.error(f"Error calling device resolve_unknown_state: {e}")
         finally:
              if target_lock:
-                  self._is_locking = False
-             else:
-                  self._is_unlocking = False
+                  # Ensure we reset the correct flag based on target
+                  pass
+             
+             self._is_locking = False
+             self._is_unlocking = False
+             
+             if not target_lock:
                   self._start_auto_lock_timer()
              self.async_write_ha_state()
 
