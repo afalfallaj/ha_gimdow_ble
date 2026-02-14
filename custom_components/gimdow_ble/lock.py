@@ -236,6 +236,11 @@ class GimdowBLELock(GimdowBLEEntity, LockEntity):
 
     async def _resolve_unknown_state(self, target_lock: bool) -> None:
         """Handle unlocking sequence when state is unknown in background."""
+        if target_lock and self._is_door_open:
+            _LOGGER.warning("Door is open during Unknown resolution. Changing target to UNLOCK and setting pending lock.")
+            target_lock = False
+            self._pending_lock = True
+
         _LOGGER.warning(f"Lock state is Unknown. Initiating force unlock sequence. Target: {'LOCK' if target_lock else 'UNLOCK'}")
         
         if target_lock:
