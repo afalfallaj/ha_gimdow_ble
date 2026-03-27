@@ -71,10 +71,22 @@ You can change sensor settings and lock behavior:
 1. Go to **Settings > Devices & Services > Gimdow A1 Pro Max BLE**.
 2. Click **Configure**.
 3. **Door Sensor**: Add, change, or remove the optional door sensor to enable/disable the Door Position Awareness features.
-4. **Unknown State Strategy**: Decide how the lock behaves when it starts up and the current state is unknown:
-   - *Resolve (Default)*: Cycles the lock mechanism slightly to determine if it is currently locked or unlocked.
-   - *Skip*: Does nothing until the lock is operated manually or the next state update arrives.
-   - *Force Lock*: Blindly sends a "lock" command to force the device into a known locked state.
+4. **Virtual Auto-Lock**: The lock automatically secures itself after being unlocked, based on a countdown timer. When combined with the optional Door Sensor, it offers advanced safety mechanics.
+
+   | Sensor Context | Scenario | Behavior |
+   | ------------- | -------- | -------- |
+   | **Disabled** | User unlocks door | Countdown starts immediately. Re-locks after delay regardless of door position. |
+   | **Enabled** | Unlocks & closes door | Countdown starts. Re-locks exactly after the delay. |
+   | **Enabled** | Unlocks & leaves door open | Countdown starts. If the delay is reached while open, the lock enters the **"Jammed"** state (serving as an *open door alert* in HA). When the door is finally closed, it locks **instantly**. |
+   | **Enabled** | User manually hits Lock while open | Lock enters "Jammed" state. When the door is closed, it locks **instantly**. |
+
+5. **Unknown State Strategy**: Decide how the lock behaves if it is operated (e.g., by the Auto-Lock timer) while its state is Unknown (such as directly after Home Assistant restarts).
+
+   | Strategy | Auto-Lock Attempt Behavior | Door Open Safety Handling |
+   | -------- | -------------------------- | ------------------------- |
+   | **Resolve (Default)** | Cycles lock: Unlocks first to verify the bolt is retracted, then automatically re-locks. | Safely identifies open door, halts locking, and enters "Jammed" state. |
+   | **Skip** | Ignores the auto-lock attempt. The lock does nothing. | Safe (no action taken). |
+   | **Force Lock** | Blindly and forcefully extends the locking bolt immediately. | **WARNING**: Will extend the deadbolt in mid-air even if the door is open. |
 
 ## Usage
 

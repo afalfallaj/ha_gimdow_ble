@@ -181,10 +181,13 @@ class GimdowBLELockManager:
         )
 
         if not is_open:
-            if self._pending.should_auto_execute(self._data.virtual_auto_lock):
-                _LOGGER.debug("[%s] Door closed + pending intent → firing lock.", self._device.address)
-                self._pending.clear()  # clears jammed state immediately via callback
+            if self._pending.active:
+                _LOGGER.debug(
+                    "[%s] Door closed — clearing pending intent and locking.",
+                    self._device.address, self._data.virtual_auto_lock,
+                )
                 self._hass.async_create_task(self.lock())
+                self._pending.clear()  # always clear so HA UI shows 'Unlocked', not 'jammed'
 
         self.start_auto_lock_timer()
 
@@ -417,9 +420,6 @@ class GimdowBLELockManager:
         )
 
         if not self._data.virtual_auto_lock:
-            return
-        if self._is_door_open:
-            _LOGGER.debug("[%s] Auto-lock: door open — timer not started.", self._device.address)
             return
         if is_locked:
             _LOGGER.debug("[%s] Auto-lock: already locked — timer not started.", self._device.address)
