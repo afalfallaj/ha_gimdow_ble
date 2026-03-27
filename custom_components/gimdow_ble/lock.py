@@ -1,32 +1,44 @@
-"""The Gimdow BLE integration."""
+"""Gimdow BLE lock platform — thin HA entity layer.
+
+All lock business logic lives in :mod:`gimdow_ble.lock_manager`.
+This file contains only:
+
+  - ``GimdowBLELockMapping`` — HA config data (datapoint IDs)
+  - ``GimdowBLECategoryLockMapping`` / ``mapping`` dict — platform setup config
+  - ``get_mapping_by_device()`` — setup helper
+  - ``GimdowBLELock`` — HA LockEntity delegate (~70 lines)
+  - ``async_setup_entry`` — HA platform setup
+"""
 from __future__ import annotations
 
-from dataclasses import dataclass
 import logging
-import asyncio
+import time
+from dataclasses import dataclass
 
-from homeassistant.components.lock import (
-    LockEntity,
-    LockEntityDescription,
-)
+from homeassistant.components.lock import LockEntity, LockEntityDescription
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, callback
-from homeassistant.helpers.entity_platform import AddEntitiesCallback
-from homeassistant.helpers.event import async_track_time_interval, async_call_later
 from homeassistant.helpers.dispatcher import async_dispatcher_connect
+from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
-from homeassistant.exceptions import HomeAssistantError
-from homeassistant.const import STATE_ON, STATE_OFF
 
-from .const import DOMAIN, ACTION_SOURCE_AUTO, ACTION_SOURCE_HA
+from .const import DOMAIN
 from .devices import GimdowBLEData, GimdowBLEEntity, GimdowBLEProductInfo
 from .gimdow_ble import GimdowBLEDataPointType, GimdowBLEDevice
+from .gimdow_ble.diagnostics import GimdowBLEDiagContext
+from .gimdow_ble.lock_manager import GimdowBLELockManager, LockBlockedReason
 
 _LOGGER = logging.getLogger(__name__)
 
 
+# ---------------------------------------------------------------------------
+# Mapping config (HA data — not business logic)
+# ---------------------------------------------------------------------------
+
 @dataclass
 class GimdowBLELockMapping:
+    """Datapoint IDs and description for a single lock entity."""
+
     lock_dp_id: int
     unlock_dp_id: int
     state_dp_id: int
@@ -39,6 +51,8 @@ class GimdowBLELockMapping:
 
 @dataclass
 class GimdowBLECategoryLockMapping:
+    """Mapping from product ID to list of lock entity configs."""
+
     products: dict[str, list[GimdowBLELockMapping]] | None = None
     mapping: list[GimdowBLELockMapping] | None = None
 
@@ -51,10 +65,7 @@ mapping: dict[str, GimdowBLECategoryLockMapping] = {
                     lock_dp_id=46,
                     unlock_dp_id=6,
                     state_dp_id=47,
-                    description=LockEntityDescription(
-                        key="lock",
-                        name=None,
-                    ),
+                    description=LockEntityDescription(key="lock", name=None),
                     unlock_value=True,
                     lock_value=True,
                 ),
@@ -65,21 +76,29 @@ mapping: dict[str, GimdowBLECategoryLockMapping] = {
 
 
 def get_mapping_by_device(device: GimdowBLEDevice) -> list[GimdowBLELockMapping]:
-    category = mapping.get(device.category)
-    if category is not None and category.products is not None:
-        product_mapping = category.products.get(device.product_id)
-        if product_mapping is not None:
-            return product_mapping
-        if category.mapping is not None:
-            return category.mapping
-        else:
-            return []
-    else:
-        return []
+    """Return the lock mappings for a specific device."""
+    cat = mapping.get(device.category)
+    if cat is not None:
+        if cat.products:
+            product_mapping = cat.products.get(device.product_id)
+            if product_mapping:
+                return product_mapping
+        if cat.mapping:
+            return cat.mapping
+    return []
 
+
+# ---------------------------------------------------------------------------
+# Lock Entity
+# ---------------------------------------------------------------------------
 
 class GimdowBLELock(GimdowBLEEntity, LockEntity):
-    """Representation of a Gimdow BLE Lock."""
+    """Representation of a Gimdow BLE Lock.
+
+    This class is a thin HA delegate. All state machine logic,
+    auto-lock timers, and pending intent management are handled by
+    :class:`~gimdow_ble.lock_manager.GimdowBLELockManager`.
+    """
 
     def __init__(
         self,
@@ -87,319 +106,199 @@ class GimdowBLELock(GimdowBLEEntity, LockEntity):
         coordinator: DataUpdateCoordinator,
         device: GimdowBLEDevice,
         product: GimdowBLEProductInfo,
-        mapping: GimdowBLELockMapping,
+        lock_mapping: GimdowBLELockMapping,
         data: GimdowBLEData,
     ) -> None:
-        super().__init__(hass, coordinator, device, product, mapping.description)
-        self._mapping = mapping
+        super().__init__(hass, coordinator, device, product, lock_mapping.description)
+        self._mapping = lock_mapping
         self._data = data
-        self._is_door_open = False
-        self._pending_lock = False
-        self._auto_lock_timer = None
-        self._unlock_wait_future = None
-        self._is_unlocking = False
-        self._is_locking = False
-        self._resolution_task: asyncio.Task | None = None
-        
-        # Attribution tracking
-        self._pending_action_source = None
-        self._last_is_locked = None
-        self._attr_changed_by = None
+        self._last_is_locked: bool | None = None
+        self._attr_changed_by: str | None = None
 
-        _LOGGER.debug(f"GimdowBLELock initialized with data: {self._data}")
+        self._lock_manager = GimdowBLELockManager(
+            device=device,
+            hass=hass,
+            data=data,
+            mapping=lock_mapping,
+            on_state_change=self.async_write_ha_state,
+        )
+
+        _LOGGER.debug(
+            "[%s] GimdowBLELock initialized. unknown_state_action=%s",
+            self._device.address, data.unknown_state_action,
+        )
+
+    # ------------------------------------------------------------------
+    # HA lifecycle
+    # ------------------------------------------------------------------
 
     async def async_added_to_hass(self) -> None:
-        """Run when entity about to be added to hass."""
         await super().async_added_to_hass()
-        
-        # Connect to dispatcher
+
         self.async_on_remove(
             async_dispatcher_connect(
                 self.hass,
                 self._data.door_update_signal,
-                self._async_door_sensor_changed
+                self._async_door_sensor_changed,
             )
         )
         self.async_on_remove(
             async_dispatcher_connect(
                 self.hass,
                 self._data.virtual_auto_lock_signal,
-                self._async_virtual_auto_lock_changed
+                self._async_virtual_auto_lock_changed,
             )
         )
         self.async_on_remove(
             async_dispatcher_connect(
                 self.hass,
                 self._data.virtual_auto_lock_time_signal,
-                self._async_virtual_auto_lock_time_changed
+                self._async_virtual_auto_lock_time_changed,
             )
         )
 
-        # Initialize state
         if self._data.is_door_open is not None:
-             self._is_door_open = self._data.is_door_open
-             _LOGGER.debug(f"Initial door state from data: {self._is_door_open}")
-             self._start_auto_lock_timer()
+            _LOGGER.debug("[%s] Initial door state: is_open=%s", self._device.address, self._data.is_door_open)
+            self._lock_manager.on_door_changed(self._data.is_door_open)
         else:
-             _LOGGER.debug(f"Initial door state: Unknown (assuming closed)")
+            _LOGGER.debug("[%s] Initial door state: unknown (assuming closed)", self._device.address)
+
+    # ------------------------------------------------------------------
+    # Dispatcher callbacks — thin wrappers, delegate to lock manager
+    # ------------------------------------------------------------------
 
     @callback
     def _async_door_sensor_changed(self, is_open: bool) -> None:
-        """Handle door sensor state changes."""
-        self._is_door_open = is_open
-        _LOGGER.debug(f"Door state changed to: is_open={self._is_door_open}")
-        
-        if not self._is_door_open and self._pending_lock:
-                _LOGGER.debug("Door closed and pending lock is set. Executing lock.")
-                self.hass.async_create_task(self.async_lock())
-        
-        self._start_auto_lock_timer()
-        
+        self._lock_manager.on_door_changed(is_open)
         self.async_write_ha_state()
 
     @callback
     def _async_virtual_auto_lock_changed(self) -> None:
-        """Handle virtual auto lock state changes."""
-        _LOGGER.debug(f"Virtual auto lock setting changed to: {self._data.virtual_auto_lock}")
-        self._start_auto_lock_timer()
+        self._lock_manager.on_auto_lock_setting_changed()
 
     @callback
     def _async_virtual_auto_lock_time_changed(self) -> None:
-        """Handle virtual auto lock time changes."""
-        _LOGGER.debug(f"Virtual auto lock time setting changed.")
-        self._start_auto_lock_timer()
+        self._lock_manager.on_auto_lock_time_changed()
+
+    # ------------------------------------------------------------------
+    # Coordinator update
+    # ------------------------------------------------------------------
 
     @callback
     def _handle_coordinator_update(self) -> None:
-        """Handle updated data from the coordinator."""
-        if self.is_locked is False:
-             self._is_unlocking = False
-             # self._is_locking = False # Don't clear locking flag here, as we might be in the middle of a lock sequence (Unknown -> Unlock -> Lock)
-        
-        if self.is_locked is True:
-             self._is_locking = False
-             # self._is_unlocking = False # Don't clear unlocking flag here? Usually if locked, we are done unlocking.
-
-
-        if self._data.virtual_auto_lock and not self.is_locked and not self._is_door_open and self._auto_lock_timer is None:
-             _LOGGER.debug("Auto lock: Detected unlocked state with no active timer. Starting timer.")
-             self._start_auto_lock_timer()
-
-        self._update_attribution()
-
+        self._lock_manager.on_coordinator_update(self.is_locked)
+        changed_by = self._lock_manager.update_attribution(self.is_locked, self._last_is_locked)
+        if changed_by is not None:
+            self._attr_changed_by = changed_by
+        self._last_is_locked = self.is_locked
         super()._handle_coordinator_update()
 
-    def _update_attribution(self) -> None:
-        """Update the changed_by attribute based on recent actions."""
-        current_is_locked = self.is_locked
-        if self._last_is_locked is not None and current_is_locked != self._last_is_locked:
-             _LOGGER.debug(f"Attribution: State changed. Pending source: {self._pending_action_source}")
-             if self._pending_action_source == ACTION_SOURCE_AUTO:
-                  self._attr_changed_by = "Auto Lock"
-             elif self._pending_action_source == ACTION_SOURCE_HA:
-                  self._attr_changed_by = None
-             else:
-                  self._attr_changed_by = "Manual"
-             
-             _LOGGER.debug(f"Attribution: Set changed_by to '{self._attr_changed_by}'")
-             self._pending_action_source = None
-        
-        self._last_is_locked = current_is_locked
-
-    @property
-    def is_jammed(self) -> bool | None:
-        """Return true if lock is jammed (locked while open)."""
-        if self.is_unlocking:
-             return False
-
-        if (self._is_door_open and self.is_locked) or self._pending_lock:
-            return True
-        return None
-
-    @property
-    def is_locking(self) -> bool:
-        """Return true if the lock is currently locking."""
-        return self._is_locking
-
-    @property
-    def is_unlocking(self) -> bool:
-        """Return true if the lock is currently unlocking."""
-        return self._is_unlocking
-
+    # ------------------------------------------------------------------
+    # Properties
+    # ------------------------------------------------------------------
 
     @property
     def is_locked(self) -> bool | None:
-        """Return true if lock is locked."""
         return self._device.get_lock_state(self._mapping.state_dp_id)
 
+    @property
+    def is_locking(self) -> bool:
+        return self._lock_manager.is_locking
 
+    @property
+    def is_unlocking(self) -> bool:
+        return self._lock_manager.is_unlocking
 
-    async def _resolve_unknown_state(self, target_lock: bool) -> None:
-        """Handle unlocking sequence when state is unknown in background."""
-        _LOGGER.warning(f"Lock state is Unknown. Initiating force unlock sequence. Target: {'LOCK' if target_lock else 'UNLOCK'}")
-        
-        if target_lock:
-             self._is_locking = True
-        else:
-             self._is_unlocking = True
-        self.async_write_ha_state()
+    @property
+    def is_jammed(self) -> bool | None:
+        """Two distinct jam conditions:
+          A) Physical jam — locked but door sensor reports open.
+          B) Software pending — HA requested lock while door open; waiting.
+        """
+        if self.is_unlocking:
+            return False
+        if self.is_locked and self._lock_manager.is_door_open:
+            return True  # A: real hardware jam
+        if self._lock_manager.pending.reason == LockBlockedReason.DOOR_OPEN_PENDING:
+            return True  # B: software pending
+        return False
 
-        try:
-             await self._device.resolve_unknown_state(
-                 unlock_dp_id=self._mapping.unlock_dp_id,
-                 unlock_value=self._mapping.unlock_value,
-                 state_dp_id=self._mapping.state_dp_id,
-                 lock_dp_id=self._mapping.lock_dp_id if target_lock else None,
-                 lock_value=self._mapping.lock_value if target_lock else None,
-                 target_lock=target_lock
-             )
-        except asyncio.CancelledError:
-             _LOGGER.debug("Unknown state resolution task was cancelled.")
-             raise
-        except Exception as e:
-             _LOGGER.error(f"Error calling device resolve_unknown_state: {e}")
-        finally:
-             if target_lock:
-                  self._is_locking = False
-             else:
-                  self._is_unlocking = False
-                  self._start_auto_lock_timer()
-             self.async_write_ha_state()
+    @property
+    def extra_state_attributes(self) -> dict:
+        """Expose lock_blocked_reason for advanced automations."""
+        reason = self._lock_manager.pending.reason.value
+        if self.is_locked and self._lock_manager.is_door_open:
+            reason = LockBlockedReason.DOOR_OPEN_LOCKED.value
+        return {"lock_blocked_reason": reason}
 
+    # ------------------------------------------------------------------
+    # Commands — delegate entirely to lock manager
+    # ------------------------------------------------------------------
 
     async def async_lock(self, **kwargs) -> None:
-        """Lock the device."""
-        self._stop_auto_lock_timer()
-        _LOGGER.debug(f"Attempting to lock. is_door_open={self._is_door_open}")
-
-        if self.is_locked is None:
-             if self._resolution_task and not self._resolution_task.done():
-                 _LOGGER.debug("Unknown state resolution already in progress. Ignoring duplicate request.")
-                 return
-
-             _LOGGER.warning("Lock state is Unknown. Starting background resolution task.")
-             self._resolution_task = self.hass.async_create_task(self._resolve_unknown_state(target_lock=True))
-             return
-
-        if self._is_door_open:
-            _LOGGER.warning("Door is open. Setting pending lock (Jammed state) and waiting for door close.")
-            self._pending_lock = True
-            self.async_write_ha_state()
-            return
-        
-        self._pending_lock = False # Clear pending if we are proceeding
-        self._is_locking = True
-        self.async_write_ha_state() # Update state to Locking
-
-        datapoint = await self._device.send_control_datapoint(
-            self._mapping.lock_dp_id,
-            self._mapping.lock_value
-        )
-
-        if datapoint:
-             if self._pending_action_source != ACTION_SOURCE_AUTO:
-                  _LOGGER.debug(f"Attribution: Lock requested via HA (source was {self._pending_action_source}). Setting source to HA.")
-                  self._pending_action_source = ACTION_SOURCE_HA
-
+        await self._lock_manager.lock()
 
     async def async_unlock(self, **kwargs) -> None:
-        """Unlock the device."""
-        if self._pending_lock:
-             _LOGGER.debug("Unlock requested. Clearing pending lock.")
-             self._pending_lock = False
-             self.async_write_ha_state()
-             return
+        await self._lock_manager.unlock()
 
-        if self.is_locked is None:
-             if self._resolution_task and not self._resolution_task.done():
-                 _LOGGER.debug("Unknown state resolution already in progress. Ignoring duplicate request.")
-                 return
+    # ------------------------------------------------------------------
+    # Diagnostic snapshot (HA-layer context)
+    # ------------------------------------------------------------------
 
-             _LOGGER.warning("Lock state is Unknown. Starting background resolution task.")
-             self._resolution_task = self.hass.async_create_task(self._resolve_unknown_state(target_lock=False))
-             return
+    def _diag_snapshot(self, action: str, error: str | None = None) -> GimdowBLEDiagContext:
+        def _dp_val(dp_id: int):
+            dp = self._device.datapoints[dp_id]
+            return dp.value if dp else None
 
-        self._is_unlocking = True
-        self.async_write_ha_state()
-        
-        datapoint = await self._device.send_control_datapoint(
-            self._mapping.unlock_dp_id,
-            self._mapping.unlock_value
-        )
-        
-        if datapoint:
-             _LOGGER.debug("Attribution: Unlock requested via HA. Setting source to HA.")
-             self._pending_action_source = ACTION_SOURCE_HA
-             self._start_auto_lock_timer()
-
-    def _start_auto_lock_timer(self) -> None:
-        """Start the auto lock timer if conditions are met."""
-        self._stop_auto_lock_timer()
-        
-        _LOGGER.debug(f"Auto lock: Checking conditions. virtual_auto_lock={self._data.virtual_auto_lock}, is_door_open={self._is_door_open}, is_locked={self.is_locked}")
-        
-        # Check virtual_auto_lock state (set by switch.py)
-        if not self._data.virtual_auto_lock:
-            _LOGGER.debug("Auto lock: Virtual auto lock is disabled.")
-            return
-
-        if self._is_door_open:
-            _LOGGER.debug("Auto lock: Door is open, timer not started.")
-            return
-
-
-        # Get delay from device DP 36 (Auto Lock Time), default to 10s
-        auto_lock_delay = 10
-        delay_dp = self._device.datapoints[36]
-        if delay_dp and delay_dp.value:
-            auto_lock_delay = int(delay_dp.value)
-
-        _LOGGER.debug(f"Auto lock: Starting timer for {auto_lock_delay} seconds.")
-        self._auto_lock_timer = async_call_later(
-            self.hass, auto_lock_delay, self._async_auto_lock_callback
+        return GimdowBLEDiagContext(
+            timestamp=time.time(),
+            address=self._device.address,
+            is_connected=self._coordinator.connected,
+            is_paired=self._device.is_paired,
+            is_resolving=self._device.is_resolving,
+            dp_state={
+                "dp47_lock_state": _dp_val(47),
+                "dp46_lock_cmd":    _dp_val(46),
+                "dp6_unlock_cmd":   _dp_val(6),
+                "dp36_auto_lock_delay": _dp_val(36),
+            },
+            action=action,
+            error=error,
+            extra={
+                "is_door_open":           self._lock_manager.is_door_open,
+                "pending_reason":         self._lock_manager.pending.reason.value,
+                "is_locking":             self._lock_manager.is_locking,
+                "is_unlocking":           self._lock_manager.is_unlocking,
+                "auto_lock_enabled":      self._data.virtual_auto_lock,
+                "auto_lock_timer_active": self._lock_manager._auto_lock_timer is not None,
+                "pending_action_source":  self._lock_manager.pending_action_source,
+                "is_locked":              self.is_locked,
+            },
         )
 
-    def _stop_auto_lock_timer(self) -> None:
-        """Stop the auto lock timer."""
-        if self._auto_lock_timer:
-            self._auto_lock_timer()
-            self._auto_lock_timer = None
-            _LOGGER.debug("Auto lock: Timer stopped.")
 
-    async def _async_auto_lock_callback(self, now) -> None:
-        """Handle auto lock timer expiration."""
-        self._auto_lock_timer = None
-        
-        if self.is_locked:
-             _LOGGER.debug("Auto lock: Timer expired, but lock is already locked. skipping.")
-             return
-             
-        _LOGGER.debug("Auto lock: Timer expired. Locking.")
-        _LOGGER.debug("Attribution: Setting source to AUTO_LOCK.")
-        self._pending_action_source = ACTION_SOURCE_AUTO
-        await self.async_lock()
-
+# ---------------------------------------------------------------------------
+# Platform setup
+# ---------------------------------------------------------------------------
 
 async def async_setup_entry(
     hass: HomeAssistant,
     entry: ConfigEntry,
     async_add_entities: AddEntitiesCallback,
 ) -> None:
-    """Set up the Gimdow BLE locks."""
+    """Set up Gimdow BLE lock entities from a config entry."""
     data: GimdowBLEData = hass.data[DOMAIN][entry.entry_id]
     mappings = get_mapping_by_device(data.device)
     entities: list[GimdowBLELock] = []
-    for mapping in mappings:
-        if mapping.force_add or data.device.datapoints.has_id(
-            mapping.state_dp_id, mapping.dp_type
-        ):
+    for m in mappings:
+        if m.force_add or data.device.datapoints.has_id(m.state_dp_id, m.dp_type):
             entities.append(
                 GimdowBLELock(
-                    hass,
-                    data.coordinator,
-                    data.device,
-                    data.product,
-                    mapping,
+                    hass=hass,
+                    coordinator=data.coordinator,
+                    device=data.device,
+                    product=data.product,
+                    lock_mapping=m,
                     data=data,
                 )
             )

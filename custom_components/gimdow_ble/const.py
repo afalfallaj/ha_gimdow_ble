@@ -29,6 +29,11 @@ CONF_ADAPTER: Final = "adapter"
 ACTION_SOURCE_AUTO: Final = "auto_lock"
 ACTION_SOURCE_HA: Final = "ha"
 
+CONF_UNKNOWN_STATE_ACTION: Final = "unknown_state_action"
+UNKNOWN_STATE_ACTION_RESOLVE: Final = "resolve"
+UNKNOWN_STATE_ACTION_SKIP: Final = "skip"
+UNKNOWN_STATE_ACTION_FORCE_LOCK: Final = "force_lock"
+
 
 CONF_AUTH_TYPE: Final = "auth_type"
 

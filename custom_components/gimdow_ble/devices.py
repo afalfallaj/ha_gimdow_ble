@@ -36,6 +36,7 @@ from .const import (
     SET_DISCONNECTED_DELAY,
     DPCode,
     DPType,
+    UNKNOWN_STATE_ACTION_RESOLVE,
 )
 
 from .base import IntegerTypeData, EnumTypeData
@@ -75,8 +76,9 @@ class GimdowBLEEntity(CoordinatorEntity):
         self._attr_has_entity_name = True
         self._attr_device_info = get_device_info(self._device)
         self._attr_unique_id = f"{self._device.device_id}-{description.key}"
+        domain = "lock" if "Lock" in self.__class__.__name__ else "sensor"
         self.entity_id = generate_entity_id(
-            "sensor.{}", self._attr_unique_id, hass=hass
+            f"{domain}.{{}}", self._attr_unique_id, hass=hass
         )
         if product.lock:
              pass
@@ -318,12 +320,12 @@ class GimdowBLEData:
     product: GimdowBLEProductInfo
     manager: HASSGimdowBLEDeviceManager
     coordinator: GimdowBLECoordinator
-    coordinator: GimdowBLECoordinator
     door_update_signal: str
     virtual_auto_lock_signal: str
     virtual_auto_lock_time_signal: str
     virtual_auto_lock: bool = False
     is_door_open: bool | None = None
+    unknown_state_action: str = UNKNOWN_STATE_ACTION_RESOLVE
 
 
 @dataclass

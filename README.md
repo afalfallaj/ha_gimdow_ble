@@ -10,7 +10,6 @@
   - Auto-lock timer
   - Motor direction
   - Lock volume
-   - Lock volume
 - **Door Position Awareness (Optional)**:
   - Integrate with any `binary_sensor` (door contact) to make the lock "aware" of the door's position.
   - **Safety Interlock**: If you try to lock while the door is open, the lock enters a **"Jammed"** (Waiting) state instead of locking the bolt in mid-air.
@@ -37,7 +36,7 @@
 3. Restart Home Assistant.
 
 ### Option 2: Manual
-1. Copy the `custom_components/tuya_ble` folder to your `config/custom_components/` directory.
+1. Copy the `custom_components/gimdow_ble` folder to your `config/custom_components/` directory.
 2. Restart Home Assistant.
 
 ## Setup
@@ -68,10 +67,14 @@ Use this if you already have your device's keys and want to skip the cloud login
    - **Device ID**
 
 ### Configuration
-You can change sensor settings:
+You can change sensor settings and lock behavior:
 1. Go to **Settings > Devices & Services > Gimdow A1 Pro Max BLE**.
 2. Click **Configure**.
 3. **Door Sensor**: Add, change, or remove the optional door sensor to enable/disable the Door Position Awareness features.
+4. **Unknown State Strategy**: Decide how the lock behaves when it starts up and the current state is unknown:
+   - *Resolve (Default)*: Cycles the lock mechanism slightly to determine if it is currently locked or unlocked.
+   - *Skip*: Does nothing until the lock is operated manually or the next state update arrives.
+   - *Force Lock*: Blindly sends a "lock" command to force the device into a known locked state.
 
 ## Usage
 
