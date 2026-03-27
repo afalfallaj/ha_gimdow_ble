@@ -54,6 +54,10 @@ from .const import (
     CONF_UUID,
     CONF_DOOR_SENSOR,
     CONF_ADAPTER,
+    CONF_UNKNOWN_STATE_ACTION,
+    UNKNOWN_STATE_ACTION_RESOLVE,
+    UNKNOWN_STATE_ACTION_SKIP,
+    UNKNOWN_STATE_ACTION_FORCE_LOCK,
     DOMAIN,
     SMARTLIFE_APP,
     TUYA_COUNTRIES,
@@ -180,13 +184,13 @@ def _show_login_form(
     )
 
 
-def _get_options_schema(hass: HomeAssistant, defaults: dict[str, Any] | None = None) -> vol.Schema:
+def _get_options_schema(hass, defaults: dict | None = None) -> vol.Schema:
     """Return the options schema with optional defaults."""
     defaults = defaults or {}
     schema = {}
 
     adapters = list(set([service_info.source for service_info in async_discovered_service_info(hass)]))
-    
+
     schema[vol.Optional(
         CONF_ADAPTER,
         description={"suggested_value": defaults.get(CONF_ADAPTER)}
@@ -197,14 +201,30 @@ def _get_options_schema(hass: HomeAssistant, defaults: dict[str, Any] | None = N
             custom_value=False,
         )
     )
-    
+
     schema[vol.Optional(
         CONF_DOOR_SENSOR,
         description={"suggested_value": defaults.get(CONF_DOOR_SENSOR)}
     )] = EntitySelector(
         EntitySelectorConfig(domain="binary_sensor")
     )
-    
+
+    schema[vol.Optional(
+        CONF_UNKNOWN_STATE_ACTION,
+        description={"suggested_value": defaults.get(CONF_UNKNOWN_STATE_ACTION, UNKNOWN_STATE_ACTION_RESOLVE)}
+    )] = SelectSelector(
+        SelectSelectorConfig(
+            options=[
+                UNKNOWN_STATE_ACTION_RESOLVE,
+                UNKNOWN_STATE_ACTION_SKIP,
+                UNKNOWN_STATE_ACTION_FORCE_LOCK,
+            ],
+            mode=SelectSelectorMode.DROPDOWN,
+            custom_value=False,
+            translation_key=CONF_UNKNOWN_STATE_ACTION,
+        )
+    )
+
     return vol.Schema(schema)
 
 
@@ -216,11 +236,12 @@ class GimdowBLEOptionsFlow(OptionsFlowWithReload):
     ) -> FlowResult:
         """Manage the options."""
         if user_input is not None:
-            # Handle clearing of optional fields
             if CONF_DOOR_SENSOR not in user_input:
                 user_input[CONF_DOOR_SENSOR] = None
             if CONF_ADAPTER not in user_input:
                 user_input[CONF_ADAPTER] = None
+            if CONF_UNKNOWN_STATE_ACTION not in user_input:
+                user_input[CONF_UNKNOWN_STATE_ACTION] = UNKNOWN_STATE_ACTION_RESOLVE
 
             options = {**self.config_entry.options, **user_input}
             return self.async_create_entry(title="", data=options)
