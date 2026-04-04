@@ -129,7 +129,8 @@
         "data": {
           "door_sensor": "Door Sensor (Optional)",
           "adapter": "Bluetooth Adapter (Optional)",
-          "unknown_state_action": "Action when Lock State is Unknown"
+          "unknown_state_action": "Action when Lock State is Unknown",
+          "transition_timeout": "State Transition Timeout (seconds)"
         },
         "description": "Configure optional settings for the Gimdow Lock."
       },

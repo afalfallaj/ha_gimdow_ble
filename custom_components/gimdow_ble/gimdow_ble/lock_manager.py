@@ -126,12 +126,16 @@ class GimdowBLELockManager:
         # Transition flags read by the HA entity for is_locking / is_unlocking
         self._is_locking: bool = False
         self._is_unlocking: bool = False
+        self._is_timeout_unknown: bool = False
 
         # Deferred lock intent
         self._pending = PendingLockIntent(on_state_change)
 
         # Auto-lock timer handle
         self._auto_lock_timer = None
+        
+        # Transition timeout handle
+        self._transition_timeout_task: asyncio.Task | None = None
 
         # Door state mirror (updated by the HA entity via on_door_changed)
         self._is_door_open: bool = False
@@ -153,6 +157,10 @@ class GimdowBLELockManager:
     @property
     def is_unlocking(self) -> bool:
         return self._is_unlocking
+
+    @property
+    def is_timeout_unknown(self) -> bool:
+        return self._is_timeout_unknown
 
     @property
     def pending(self) -> PendingLockIntent:
@@ -205,8 +213,14 @@ class GimdowBLELockManager:
         """Called by the HA entity after every coordinator update."""
         if is_locked is False:
             self._is_unlocking = False
+            self._is_locking = False
+            self._is_timeout_unknown = False
+            self._cancel_transition_timeout()
         if is_locked is True:
             self._is_locking = False
+            self._is_unlocking = False
+            self._is_timeout_unknown = False
+            self._cancel_transition_timeout()
 
         # Safety net: if unlocked with no timer and auto-lock is on, restart timer
         if (
@@ -270,6 +284,8 @@ class GimdowBLELockManager:
         # --- Normal lock ---
         self._pending.clear()
         self._is_locking = True
+        self._is_timeout_unknown = False
+        self._start_transition_timeout()
         self._on_state_change()
         try:
             dp = await self._device.send_control_datapoint(
@@ -283,6 +299,7 @@ class GimdowBLELockManager:
                 self._device.address, e, self._pending, self._is_locking, self._is_door_open,
             )
             self._is_locking = False
+            self._cancel_transition_timeout()
             self._on_state_change()
 
     async def unlock(self) -> None:
@@ -307,6 +324,8 @@ class GimdowBLELockManager:
 
         # --- Normal unlock ---
         self._is_unlocking = True
+        self._is_timeout_unknown = False
+        self._start_transition_timeout()
         self._on_state_change()
         try:
             dp = await self._device.send_control_datapoint(
@@ -320,6 +339,7 @@ class GimdowBLELockManager:
                 "[%s] unlock() failed: %s. unlocking=%s", self._device.address, e, self._is_unlocking
             )
             self._is_unlocking = False
+            self._cancel_transition_timeout()
             self._on_state_change()
 
     # ------------------------------------------------------------------
@@ -342,6 +362,8 @@ class GimdowBLELockManager:
                 self._device.address,
             )
             self._is_locking = True
+            self._is_timeout_unknown = False
+            self._start_transition_timeout()
             self._on_state_change()
             try:
                 await self._device.send_control_datapoint(
@@ -352,6 +374,7 @@ class GimdowBLELockManager:
                     "[%s] force_lock failed: %s", self._device.address, e
                 )
                 self._is_locking = False
+                self._cancel_transition_timeout()
                 self._on_state_change()
             return
 
@@ -452,3 +475,29 @@ class GimdowBLELockManager:
         _LOGGER.debug("[%s] Auto-lock: timer expired → locking.", self._device.address)
         self._pending_action_source = ACTION_SOURCE_AUTO
         await self.lock()
+
+    # ------------------------------------------------------------------
+    # Transition Timeout Timer
+    # ------------------------------------------------------------------
+
+    def _start_transition_timeout(self) -> None:
+        self._cancel_transition_timeout()
+        timeout = self._data.transition_timeout
+        if timeout <= 0:
+            return
+
+        async def _timeout_task():
+            await asyncio.sleep(timeout)
+            _LOGGER.warning("[%s] Transition timeout reached. Marking state as Unknown.", self._device.address)
+            self._is_locking = False
+            self._is_unlocking = False
+            self._is_timeout_unknown = True
+            self._on_state_change()
+
+        self._transition_timeout_task = self._hass.async_create_task(_timeout_task())
+
+    def _cancel_transition_timeout(self) -> None:
+        if self._transition_timeout_task:
+            self._transition_timeout_task.cancel()
+            self._transition_timeout_task = None
+

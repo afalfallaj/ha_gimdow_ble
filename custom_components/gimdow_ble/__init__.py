@@ -15,7 +15,7 @@ from homeassistant.exceptions import ConfigEntryNotReady
 from .gimdow_ble import GimdowBLEDevice
 
 from .cloud import HASSGimdowBLEDeviceManager
-from .const import CONF_ADAPTER, DOMAIN, CONF_UNKNOWN_STATE_ACTION, UNKNOWN_STATE_ACTION_RESOLVE
+from .const import CONF_ADAPTER, DOMAIN, CONF_UNKNOWN_STATE_ACTION, CONF_TRANSITION_TIMEOUT, UNKNOWN_STATE_ACTION_RESOLVE
 from .devices import GimdowBLECoordinator, GimdowBLEData, get_device_product_info
 
 PLATFORMS: list[Platform] = [
@@ -82,6 +82,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         virtual_auto_lock_signal=f"gimdow_virtual_auto_lock_{device.device_id}",
         virtual_auto_lock_time_signal=f"gimdow_virtual_auto_lock_time_{device.device_id}",
         unknown_state_action=entry.options.get(CONF_UNKNOWN_STATE_ACTION, UNKNOWN_STATE_ACTION_RESOLVE),
+        transition_timeout=entry.options.get(CONF_TRANSITION_TIMEOUT, 60),
     )
 
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)

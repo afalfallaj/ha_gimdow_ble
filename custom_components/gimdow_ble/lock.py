@@ -199,6 +199,8 @@ class GimdowBLELock(GimdowBLEEntity, LockEntity):
 
     @property
     def is_locked(self) -> bool | None:
+        if self._lock_manager.is_timeout_unknown:
+            return None
         return self._device.get_lock_state(self._mapping.state_dp_id)
 
     @property

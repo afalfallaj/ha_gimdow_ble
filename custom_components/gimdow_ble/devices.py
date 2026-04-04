@@ -326,6 +326,7 @@ class GimdowBLEData:
     virtual_auto_lock: bool = False
     is_door_open: bool | None = None
     unknown_state_action: str = UNKNOWN_STATE_ACTION_RESOLVE
+    transition_timeout: int = 60
 
 
 @dataclass

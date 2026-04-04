@@ -30,6 +30,7 @@ ACTION_SOURCE_AUTO: Final = "auto_lock"
 ACTION_SOURCE_HA: Final = "ha"
 
 CONF_UNKNOWN_STATE_ACTION: Final = "unknown_state_action"
+CONF_TRANSITION_TIMEOUT: Final = "transition_timeout"
 UNKNOWN_STATE_ACTION_RESOLVE: Final = "resolve"
 UNKNOWN_STATE_ACTION_SKIP: Final = "skip"
 UNKNOWN_STATE_ACTION_FORCE_LOCK: Final = "force_lock"

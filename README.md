@@ -88,6 +88,8 @@ You can change sensor settings and lock behavior:
    | **Skip** | Ignores the auto-lock attempt. The lock does nothing. | Safe (no action taken). |
    | **Force Lock** | Blindly and forcefully extends the locking bolt immediately. | **WARNING**: Will extend the deadbolt in mid-air even if the door is open. |
 
+6. **State Transition Timeout**: Set the maximum duration (in seconds) the integration will wait for a physical lock/unlock transition to complete before falling back to an `Unknown` state. Default is 60s. Set to 0 to disable.
+
 ## Usage
 
 Once added, the following entities will be available:
