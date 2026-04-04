@@ -31,6 +31,9 @@ from homeassistant.helpers.selector import (
     SelectSelector,
     SelectSelectorConfig,
     SelectSelectorMode,
+    NumberSelector,
+    NumberSelectorConfig,
+    NumberSelectorMode,
 )
 from homeassistant.core import callback
 from homeassistant.data_entry_flow import FlowHandler, FlowResult
@@ -55,6 +58,7 @@ from .const import (
     CONF_DOOR_SENSOR,
     CONF_ADAPTER,
     CONF_UNKNOWN_STATE_ACTION,
+    CONF_TRANSITION_TIMEOUT,
     UNKNOWN_STATE_ACTION_RESOLVE,
     UNKNOWN_STATE_ACTION_SKIP,
     UNKNOWN_STATE_ACTION_FORCE_LOCK,
@@ -225,6 +229,15 @@ def _get_options_schema(hass, defaults: dict | None = None) -> vol.Schema:
         )
     )
 
+    schema[vol.Optional(
+        CONF_TRANSITION_TIMEOUT,
+        default=defaults.get(CONF_TRANSITION_TIMEOUT, 60),
+    )] = NumberSelector(
+        NumberSelectorConfig(
+            min=0, max=300, step=1, mode=NumberSelectorMode.BOX
+        )
+    )
+
     return vol.Schema(schema)
 
 
@@ -242,6 +255,8 @@ class GimdowBLEOptionsFlow(OptionsFlowWithReload):
                 user_input[CONF_ADAPTER] = None
             if CONF_UNKNOWN_STATE_ACTION not in user_input:
                 user_input[CONF_UNKNOWN_STATE_ACTION] = UNKNOWN_STATE_ACTION_RESOLVE
+            if CONF_TRANSITION_TIMEOUT not in user_input:
+                user_input[CONF_TRANSITION_TIMEOUT] = 60
 
             options = {**self.config_entry.options, **user_input}
             return self.async_create_entry(title="", data=options)
