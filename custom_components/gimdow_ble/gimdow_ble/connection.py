@@ -228,13 +228,27 @@ class GimdowBLEConnection:
             self._client = client
 
             # --- Subscribe to notifications ---
-            try:
-                await self._client.start_notify(CHARACTERISTIC_NOTIFY, self._notification_handler)
-            except Exception as ex:
-                _LOGGER.error("%s: start_notify failed: %s", self.address, ex, exc_info=True)
-                self._client = None
-                await client.disconnect()
-                return
+            _START_NOTIFY_ATTEMPTS = 3
+            for attempt in range(1, _START_NOTIFY_ATTEMPTS + 1):
+                try:
+                    await self._client.start_notify(CHARACTERISTIC_NOTIFY, self._notification_handler)
+                    break
+                except Exception as ex:
+                    if attempt < _START_NOTIFY_ATTEMPTS:
+                        _LOGGER.warning(
+                            "%s: start_notify attempt %s/%s failed: %s — retrying",
+                            self.address, attempt, _START_NOTIFY_ATTEMPTS, ex,
+                        )
+                        await asyncio.sleep(1)
+                    else:
+                        _LOGGER.error(
+                            "%s: start_notify failed after %s attempts: %s",
+                            self.address, _START_NOTIFY_ATTEMPTS, ex, exc_info=True,
+                        )
+                        self._client = None
+                        await client.disconnect()
+                        return
+
 
             # --- Handshake: device info ---
             if self._client and self._client.is_connected:
@@ -338,7 +352,7 @@ class GimdowBLEConnection:
             return
         if not (self._client and self._client.is_connected):
             _LOGGER.debug("%s: Not connected — skipping send", self.address)
-            return
+            raise BleakError(f"{self.address}: Not connected after _ensure_connected")
         await self._send_packet_while_connected(code, data, 0, wait_for_response)
 
     async def _send_response(self, code: GimdowBLECode, data: bytes, response_to: int) -> None:
