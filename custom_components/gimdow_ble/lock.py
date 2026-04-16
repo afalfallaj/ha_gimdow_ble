@@ -187,8 +187,8 @@ class GimdowBLELock(GimdowBLEEntity, LockEntity):
     @callback
     def _handle_coordinator_update(self) -> None:
         self._lock_manager.on_coordinator_update(self.is_locked)
-        changed_by = self._lock_manager.update_attribution(self.is_locked, self._last_is_locked)
-        if changed_by is not None:
+        did_change, changed_by = self._lock_manager.update_attribution(self.is_locked, self._last_is_locked)
+        if did_change:
             self._attr_changed_by = changed_by
         self._last_is_locked = self.is_locked
         super()._handle_coordinator_update()

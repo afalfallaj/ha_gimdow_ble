@@ -234,8 +234,8 @@ class GimdowBLELockManager:
 
     def update_attribution(
         self, current_is_locked: bool | None, last_is_locked: bool | None
-    ) -> str | None:
-        """Return the new changed_by string when a state transition occurs, else None."""
+    ) -> tuple[bool, str | None]:
+        """Return (True, changed_by) when a state transition occurs, else (False, None)."""
         if last_is_locked is not None and current_is_locked != last_is_locked:
             if self._pending_action_source == ACTION_SOURCE_AUTO:
                 changed_by: str | None = "Auto Lock"
@@ -249,8 +249,8 @@ class GimdowBLELockManager:
                 self._pending_action_source, changed_by,
             )
             self._pending_action_source = None
-            return changed_by
-        return None  # no transition
+            return True, changed_by
+        return False, None  # no transition
 
     # ------------------------------------------------------------------
     # Main lock / unlock operations
