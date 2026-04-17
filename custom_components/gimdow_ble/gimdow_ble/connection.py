@@ -228,26 +228,16 @@ class GimdowBLEConnection:
             self._client = client
 
             # --- Subscribe to notifications ---
-            _START_NOTIFY_ATTEMPTS = 3
-            for attempt in range(1, _START_NOTIFY_ATTEMPTS + 1):
-                try:
-                    await self._client.start_notify(CHARACTERISTIC_NOTIFY, self._notification_handler)
-                    break
-                except Exception as ex:
-                    if attempt < _START_NOTIFY_ATTEMPTS:
-                        _LOGGER.warning(
-                            "%s: start_notify attempt %s/%s failed: %s — retrying",
-                            self.address, attempt, _START_NOTIFY_ATTEMPTS, ex,
-                        )
-                        await asyncio.sleep(1)
-                    else:
-                        _LOGGER.error(
-                            "%s: start_notify failed after %s attempts: %s",
-                            self.address, _START_NOTIFY_ATTEMPTS, ex, exc_info=True,
-                        )
-                        self._client = None
-                        await client.disconnect()
-                        return
+            try:
+                await self._client.start_notify(CHARACTERISTIC_NOTIFY, self._notification_handler)
+            except Exception as ex:
+                # When start_notify fails, the peripheral already dropped the connection.
+                # The _disconnected callback has fired and set self._client = None.
+                # Retrying start_notify on the same dead client is pointless — we need
+                # a full reconnect cycle. Schedule _reconnect() and return.
+                _LOGGER.warning("%s: start_notify failed: %s — scheduling reconnect", self.address, ex)
+                self._client = None
+                self._create_safe_task(self._reconnect())
 
 
             # --- Handshake: device info ---
