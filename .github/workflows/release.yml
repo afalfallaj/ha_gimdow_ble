@@ -1,4 +1,4 @@
-name: Release
+name: Release Pipeline
 
 on:
   push:
@@ -10,8 +10,13 @@ on:
       - 'README.md'
       - 'LICENSE'
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
 jobs:
   release:
+    name: Build and Publish
     if: "!contains(github.event.head_commit.message, '[skip ci]')"
     runs-on: ubuntu-latest
     permissions:
@@ -22,21 +27,22 @@ jobs:
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
-          token: ${{ secrets.GH_TOKEN }}
+          # Use GH_TOKEN if it exists (for bypassing strict branch rules), otherwise fallback to standard token
+          token: ${{ secrets.GH_TOKEN || secrets.GITHUB_TOKEN }}
 
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: '3.x'
 
-      - name: Determine current branch
+      - name: Determine Target Branch
         id: branch
         run: echo "branch=${GITHUB_REF##*/}" >> $GITHUB_OUTPUT
 
       - name: Bump Version
         id: bump
         run: |
-          NEW_VERSION=$(python3 .github/scripts/update_version.py custom_components/gimdow_ble/manifest.json custom_components/gimdow_ble/gimdow_ble/__init__.py ${{ steps.branch.outputs.branch }})
+          NEW_VERSION=$(python3 .github/scripts/update_version.py custom_components/gimdow_ble/manifest.json custom_components/gimdow_ble/gimdow_ble/__init__.py ${{ steps.branch.outputs.branch }} --message "${{ github.event.head_commit.message }}")
           echo "New version: $NEW_VERSION"
           echo "version=$NEW_VERSION" >> $GITHUB_OUTPUT
 
@@ -44,14 +50,17 @@ jobs:
         if: steps.bump.outputs.version != ''
         run: |
           git config --global user.name "github-actions[bot]"
-          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          
           git add custom_components/gimdow_ble/manifest.json custom_components/gimdow_ble/gimdow_ble/__init__.py
           git commit -m "chore(release): bump version to ${{ steps.bump.outputs.version }} [skip ci]"
           git tag v${{ steps.bump.outputs.version }}
-          git push
+          
+          # Explicitly target the branch to avoid ambiguity
+          git push origin ${{ steps.branch.outputs.branch }}
           git push origin v${{ steps.bump.outputs.version }}
 
-      - name: Create Release
+      - name: Create GitHub Release
         if: steps.bump.outputs.version != ''
         uses: softprops/action-gh-release@v2
         with:
@@ -59,5 +68,16 @@ jobs:
           name: Release v${{ steps.bump.outputs.version }}
           generate_release_notes: true
           prerelease: ${{ steps.branch.outputs.branch == 'dev' }}
+
+      - name: Sync Production back to Dev
+        # Only runs after a successful production release to keep the branches aligned
+        if: steps.branch.outputs.branch == 'main' && steps.bump.outputs.version != ''
+        run: |
+          git fetch origin dev
+          git checkout dev
+          # -X theirs prioritizes main's stable version numbers over dev's beta numbers
+          git merge main -X theirs -m "chore: sync dev with main release v${{ steps.bump.outputs.version }} [skip ci]"
+          git push origin dev
         env:
-          GITHUB_TOKEN: ${{ secrets.GH_TOKEN }}
+          # Requires a PAT if 'dev' has branch protections enabled
+          GITHUB_TOKEN: ${{ secrets.GH_TOKEN || secrets.GITHUB_TOKEN }}
