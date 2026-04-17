@@ -210,17 +210,27 @@ class GimdowBLELockManager:
         self.start_auto_lock_timer()
 
     def on_coordinator_update(self, is_locked: bool | None) -> None:
-        """Called by the HA entity after every coordinator update."""
+        """Called by the HA entity after every coordinator update.
+
+        Only clear the transition flag whose *target* state has been reached:
+        - is_locked=False  → unlock completed, clear _is_unlocking
+        - is_locked=True   → lock completed,   clear _is_locking
+
+        The opposite flag (e.g. _is_locking while still unlocked) is left
+        alone so the UI keeps showing "locking" until the device confirms
+        or the transition timeout fires.
+        """
         if is_locked is False:
             self._is_unlocking = False
+            # Only clear timeout when no transition is in progress
+            if not self._is_locking:
+                self._is_timeout_unknown = False
+                self._cancel_transition_timeout()
+        elif is_locked is True:
             self._is_locking = False
-            self._is_timeout_unknown = False
-            self._cancel_transition_timeout()
-        if is_locked is True:
-            self._is_locking = False
-            self._is_unlocking = False
-            self._is_timeout_unknown = False
-            self._cancel_transition_timeout()
+            if not self._is_unlocking:
+                self._is_timeout_unknown = False
+                self._cancel_transition_timeout()
 
         # Safety net: if unlocked with no timer and auto-lock is on, restart timer
         if (
