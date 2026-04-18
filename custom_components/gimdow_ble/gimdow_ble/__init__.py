@@ -15,7 +15,7 @@ from .exceptions import (
     GimdowBLEResolutionAbortedError,
 )
 
-__version__ = "2.0.5"
+__version__ = "2.0.6b0"
 
 __all__ = [
     "AbstaractGimdowBLEDeviceManager",
