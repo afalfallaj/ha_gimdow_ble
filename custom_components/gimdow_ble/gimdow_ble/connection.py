@@ -233,11 +233,14 @@ class GimdowBLEConnection:
             except Exception as ex:
                 # When start_notify fails, the peripheral already dropped the connection.
                 # The _disconnected callback has fired and set self._client = None.
-                # Retrying start_notify on the same dead client is pointless — we need
-                # a full reconnect cycle. Schedule _reconnect() and return.
+                # We need a full reconnect cycle — but we must wait for the ESPHome
+                # proxy to exit its CONNECTING state before attempting again, otherwise
+                # it will reject the next establish_connection with:
+                #   "Connection request ignored, state: CONNECTING"
                 _LOGGER.warning("%s: start_notify failed: %s — scheduling reconnect", self.address, ex)
                 self._client = None
-                self._create_safe_task(self._reconnect())
+                self._create_safe_task(self._reconnect(initial_delay=self._PROXY_CLEAR_DELAY))
+                return
 
 
             # --- Handshake: device info ---
@@ -286,12 +289,25 @@ class GimdowBLEConnection:
 
     _MAX_RECONNECT_ATTEMPTS = 10
     _RECONNECT_BACKOFF_MAX = 300  # 5-minute ceiling
+    # How long to wait before the first reconnect after a failed handshake.
+    # The ESPHome BLE proxy needs this time to exit its CONNECTING state;
+    # without it the next establish_connection call is rejected immediately.
+    _PROXY_CLEAR_DELAY = 5.0
 
-    async def _reconnect(self) -> None:
-        """Attempt reconnect with exponential backoff and max retries."""
-        _LOGGER.debug("%s: Reconnecting…", self.address)
+    async def _reconnect(self, initial_delay: float = 0.0) -> None:
+        """Attempt reconnect with exponential backoff and max retries.
+
+        Args:
+            initial_delay: seconds to wait before the first connection attempt.
+                Use _PROXY_CLEAR_DELAY when reconnecting after a failed handshake
+                so the ESPHome proxy has time to clear its CONNECTING state.
+        """
+        _LOGGER.debug("%s: Reconnecting… (initial_delay=%.1fs)", self.address, initial_delay)
         async with self._seq_num_lock:
             self._current_seq_num = 1
+
+        if initial_delay > 0:
+            await asyncio.sleep(initial_delay)
 
         for attempt in range(1, self._MAX_RECONNECT_ATTEMPTS + 1):
             if self._expected_disconnect:
