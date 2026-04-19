@@ -33,10 +33,6 @@ _LOGGER = logging.getLogger(__name__)
 
 BLEAK_EXCEPTIONS = (*BLEAK_RETRY_EXCEPTIONS, OSError)
 
-# Global lock prevents parallel BLE establish_connection calls that can
-# interfere with each other on some platforms.
-global_connect_lock = asyncio.Lock()
-
 
 class GimdowBLEConnection:
     """Mixin: BLE lifecycle management, packet send pipeline, and event callbacks."""
@@ -54,6 +50,7 @@ class GimdowBLEConnection:
         self._callbacks: list[Callable[[list[GimdowBLEDataPoint]], None]] = []
         self._disconnected_callbacks: list[Callable[[], None]] = []
         self._is_paired: bool = False
+        self._keep_alive_timer: asyncio.TimerHandle | None = None
 
     # ------------------------------------------------------------------
     # Public callback registration
@@ -125,6 +122,7 @@ class GimdowBLEConnection:
     async def stop(self) -> None:
         """Disconnect and stop the device."""
         _LOGGER.debug("%s: Stopping", self.address)
+        self._cancel_keep_alive()
         await self._execute_disconnect()
 
     # ------------------------------------------------------------------
@@ -141,6 +139,7 @@ class GimdowBLEConnection:
 
     async def _execute_disconnect(self) -> None:
         _LOGGER.debug("%s: Executing disconnect", self.address)
+        self._cancel_keep_alive()
         async with self._connect_lock:
             client = self._client
             self._expected_disconnect = True
@@ -161,14 +160,19 @@ class GimdowBLEConnection:
         """
         was_paired = self._is_paired
         self._is_paired = False
-        self._fire_disconnected_callbacks()
+        self._cancel_keep_alive()
+        
         if self._expected_disconnect:
             _LOGGER.debug("%s: Expected disconnect; RSSI: %s", self.address, self.rssi)
+            self._fire_disconnected_callbacks()
             return
+            
         self._client = None
-        _LOGGER.debug("%s: Unexpected disconnect; RSSI: %s", self.address, self.rssi)
+        _LOGGER.warning("%s: Unexpected disconnect; RSSI: %s", self.address, self.rssi)
+        self._fire_disconnected_callbacks()
+        
         if was_paired:
-            _LOGGER.debug("%s: Scheduling reconnect", self.address)
+            _LOGGER.info("%s: Scheduling reconnect after unexpected disconnect", self.address)
             try:
                 loop = asyncio.get_running_loop()
             except RuntimeError:
@@ -179,13 +183,63 @@ class GimdowBLEConnection:
                 return
             loop.call_soon_threadsafe(self._create_safe_task, self._reconnect())
 
+    async def _execute_forced_disconnect(self) -> None:
+        """Force disconnect for error recovery. The _disconnected callback
+        will trigger _reconnect to restore the persistent connection."""
+        _LOGGER.debug("%s: Executing forced disconnect", self.address)
+        self._cancel_keep_alive()
+        async with self._connect_lock:
+            client = self._client
+            self._client = None
+            self._is_paired = False
+            if client:
+                try:
+                    if client.is_connected:
+                        await client.stop_notify(CHARACTERISTIC_NOTIFY)
+                        await client.disconnect()
+                except BLEAK_EXCEPTIONS as ex:
+                    _LOGGER.debug("%s: Error during forced disconnect: %s", self.address, ex)
+        async with self._seq_num_lock:
+            self._current_seq_num = 1
+
+    _KEEP_ALIVE_INTERVAL = 25.0
+
+    def _schedule_keep_alive(self) -> None:
+        """Schedule or reschedule the keep-alive timer."""
+        self._cancel_keep_alive()
+        if self._expected_disconnect:
+            return
+        self._keep_alive_timer = asyncio.get_running_loop().call_later(
+            self._KEEP_ALIVE_INTERVAL, self._keep_alive_fired
+        )
+
+    def _cancel_keep_alive(self) -> None:
+        if self._keep_alive_timer:
+            self._keep_alive_timer.cancel()
+            self._keep_alive_timer = None
+
+    def _keep_alive_fired(self) -> None:
+        """Send a status query to keep the connection alive."""
+        if self._client and self._client.is_connected and self._is_paired:
+            _LOGGER.debug("%s: Keep-alive ping", self.address)
+            self._create_safe_task(self._keep_alive_ping())
+        
+    async def _keep_alive_ping(self) -> None:
+        try:
+            await self._send_packet_while_connected(
+                GimdowBLECode.FUN_SENDER_DEVICE_STATUS, bytes(), 0, False
+            )
+        except BLEAK_EXCEPTIONS:
+            _LOGGER.debug("%s: Keep-alive failed — connection will recover via _disconnected", 
+                          self.address, exc_info=True)
+        self._schedule_keep_alive()
+
     # ------------------------------------------------------------------
     # Connect / reconnect
     # ------------------------------------------------------------------
 
     async def _ensure_connected(self) -> None:
         """Make sure a paired BLE connection exists; perform handshake if not."""
-        global global_connect_lock
         if self._expected_disconnect:
             return
         if self._connect_lock.locked():
@@ -197,31 +251,31 @@ class GimdowBLEConnection:
             return
 
         async with self._connect_lock:
+            self._expected_disconnect = False
             await asyncio.sleep(0.01)
             if self._client and self._client.is_connected and self._is_paired:
                 return
 
             # --- Establish BLE connection ---
             try:
-                async with global_connect_lock:
-                    _LOGGER.debug("%s: Connecting; RSSI: %s", self.address, self.rssi)
-                    client = await establish_connection(
-                        BleakClientWithServiceCache,
-                        self._ble_device,
-                        self.address,
-                        self._disconnected,
-                        use_services_cache=True,
-                        ble_device_callback=lambda: self._ble_device,
-                    )
+                _LOGGER.debug("%s: Connecting; RSSI: %s", self.address, self.rssi)
+                client = await establish_connection(
+                    BleakClientWithServiceCache,
+                    self._ble_device,
+                    self.address,
+                    self._disconnected,
+                    use_services_cache=True,
+                    ble_device_callback=lambda: self._ble_device,
+                )
             except BLEAK_EXCEPTIONS as ex:
-                _LOGGER.error("%s: BLE connection failed: %s", self.address, ex)
+                _LOGGER.warning("%s: BLE connection failed: %s", self.address, ex)
                 return
             except Exception as ex:
                 _LOGGER.error("%s: Unexpected error during connect: %s", self.address, ex, exc_info=True)
                 return
 
             if not (client and client.is_connected):
-                _LOGGER.debug("%s: Failed to connect", self.address)
+                _LOGGER.warning("%s: establish_connection returned but client is not connected", self.address)
                 return
 
             _LOGGER.debug("%s: Connected; RSSI: %s", self.address, self.rssi)
@@ -280,12 +334,13 @@ class GimdowBLEConnection:
             # --- Final state assessment ---
             if self._client and self._client.is_connected:
                 if self._is_paired:
-                    _LOGGER.debug("%s: Connected and paired successfully", self.address)
+                    _LOGGER.info("%s: Connected and paired successfully; RSSI: %s", self.address, self.rssi)
+                    self._schedule_keep_alive()
                     self._fire_connected_callbacks()
                 else:
-                    _LOGGER.error("%s: Connected but pairing failed", self.address)
+                    _LOGGER.warning("%s: Connected but pairing failed — will retry on next command", self.address)
             else:
-                _LOGGER.error("%s: Handshake incomplete — no valid connection", self.address)
+                _LOGGER.warning("%s: Handshake incomplete — no valid connection; RSSI: %s", self.address, self.rssi)
 
     _MAX_RECONNECT_ATTEMPTS = 10
     _RECONNECT_BACKOFF_MAX = 300  # 5-minute ceiling
@@ -302,7 +357,7 @@ class GimdowBLEConnection:
                 Use _PROXY_CLEAR_DELAY when reconnecting after a failed handshake
                 so the ESPHome proxy has time to clear its CONNECTING state.
         """
-        _LOGGER.debug("%s: Reconnecting… (initial_delay=%.1fs)", self.address, initial_delay)
+        _LOGGER.info("%s: Reconnecting… (initial_delay=%.1fs); RSSI: %s", self.address, initial_delay, self.rssi)
         async with self._seq_num_lock:
             self._current_seq_num = 1
 
@@ -329,20 +384,23 @@ class GimdowBLEConnection:
                     BLEAK_BACKOFF_TIME * (2 ** (attempt - 1)),
                     self._RECONNECT_BACKOFF_MAX,
                 )
-                _LOGGER.debug(
-                    "%s: Reconnect attempt %s failed — backing off %ss",
-                    self.address, attempt, backoff, exc_info=True,
+                _LOGGER.warning(
+                    "%s: Reconnect attempt %s/%s failed — backing off %ss; RSSI: %s",
+                    self.address, attempt, self._MAX_RECONNECT_ATTEMPTS, backoff, self.rssi,
+                    exc_info=True,
                 )
                 await asyncio.sleep(backoff)
 
         _LOGGER.error(
-            "%s: Reconnect failed after %s attempts — giving up",
-            self.address, self._MAX_RECONNECT_ATTEMPTS,
+            "%s: Reconnect failed after %s attempts — giving up; RSSI: %s",
+            self.address, self._MAX_RECONNECT_ATTEMPTS, self.rssi,
         )
 
     # ------------------------------------------------------------------
     # Packet send pipeline
     # ------------------------------------------------------------------
+
+    _MAX_COMMAND_ATTEMPTS = 3
 
     async def _send_packet(
         self,
@@ -350,16 +408,38 @@ class GimdowBLEConnection:
         data: bytes,
         wait_for_response: bool = True,
     ) -> None:
-        """Ensure connection, then send a packet."""
-        if self._expected_disconnect:
-            return
-        await self._ensure_connected()
-        if self._expected_disconnect:
-            return
-        if not (self._client and self._client.is_connected):
-            _LOGGER.debug("%s: Not connected — skipping send", self.address)
-            raise BleakError(f"{self.address}: Not connected after _ensure_connected")
-        await self._send_packet_while_connected(code, data, 0, wait_for_response)
+        """Ensure connection, then send a packet with retry."""
+        last_error: Exception | None = None
+        for attempt in range(1, self._MAX_COMMAND_ATTEMPTS + 1):
+            if self._expected_disconnect:
+                return
+            try:
+                await self._ensure_connected()
+                if self._expected_disconnect:
+                    return
+                if not (self._client and self._client.is_connected):
+                    _LOGGER.debug("%s: Not connected — skipping send", self.address)
+                    raise BleakError(f"{self.address}: Not connected after _ensure_connected")
+                await self._send_packet_while_connected(code, data, 0, wait_for_response)
+                return  # Success
+            except BleakNotFoundError:
+                raise  # Device gone — don't retry
+            except BLEAK_EXCEPTIONS as ex:
+                last_error = ex
+                if attempt < self._MAX_COMMAND_ATTEMPTS:
+                    backoff = self._PROXY_CLEAR_DELAY
+                    _LOGGER.debug(
+                        "%s: Command attempt %s/%s failed: %s — retrying in %.1fs",
+                        self.address, attempt, self._MAX_COMMAND_ATTEMPTS, ex, backoff,
+                    )
+                    await asyncio.sleep(backoff)
+                else:
+                    _LOGGER.error(
+                        "%s: Command failed after %s attempts", 
+                        self.address, self._MAX_COMMAND_ATTEMPTS, exc_info=True,
+                    )
+        if last_error:
+            raise last_error
 
     async def _send_response(self, code: GimdowBLECode, data: bytes, response_to: int) -> None:
         """Send a protocol response (no reconnect)."""
@@ -388,6 +468,8 @@ class GimdowBLEConnection:
         packets = self._build_packets(seq_num, code, data, response_to)
         await self._int_send_packet_while_connected(packets)
 
+        self._schedule_keep_alive()
+
         if future:
             try:
                 await asyncio.wait_for(future, RESPONSE_WAIT_TIMEOUT)
@@ -415,40 +497,24 @@ class GimdowBLEConnection:
                 _LOGGER.error("%s: Communication failed", self.address, exc_info=True)
                 raise
 
-    async def _resend_packets(self, packets: list[bytes], initial_delay: float = 0.0) -> None:
-        if self._expected_disconnect:
-            return
-        if initial_delay > 0:
-            _LOGGER.debug("%s: Waiting %.1fs before retry (proxy clear delay)", self.address, initial_delay)
-            await asyncio.sleep(initial_delay)
-        if self._expected_disconnect:
-            return
-        await self._ensure_connected()
-        if self._expected_disconnect:
-            return
-        await self._int_send_packet_while_connected(packets)
-
     async def _send_packets_locked(self, packets: list[bytes]) -> None:
         try:
             await self._int_send_packets_locked(packets)
         except BleakDBusError as ex:
             await asyncio.sleep(BLEAK_BACKOFF_TIME)
-            _LOGGER.debug(
-                "%s: Backing off %ss after DBus error: %s; RSSI: %s",
+            _LOGGER.warning(
+                "%s: DBus error during send (backoff %ss): %s; RSSI: %s — forcing disconnect",
                 self.address, BLEAK_BACKOFF_TIME, ex, self.rssi,
             )
-            if self._is_paired:
-                self._create_safe_task(self._resend_packets(packets, initial_delay=self._PROXY_CLEAR_DELAY))
-            else:
-                self._create_safe_task(self._reconnect(initial_delay=self._PROXY_CLEAR_DELAY))
-        except BleakError as ex:
-            _LOGGER.debug(
-                "%s: BleakError during send: %s; RSSI: %s", self.address, ex, self.rssi
+            await self._execute_forced_disconnect()
+            raise
+        except BLEAK_EXCEPTIONS as ex:
+            _LOGGER.warning(
+                "%s: Send error during packet transmission: %s; RSSI: %s — forcing disconnect", 
+                self.address, ex, self.rssi
             )
-            if self._is_paired:
-                self._create_safe_task(self._resend_packets(packets, initial_delay=self._PROXY_CLEAR_DELAY))
-            else:
-                self._create_safe_task(self._reconnect(initial_delay=self._PROXY_CLEAR_DELAY))
+            await self._execute_forced_disconnect()
+            raise
 
     async def _int_send_packets_locked(self, packets: list[bytes]) -> None:
         """Write raw GATT packets to the device."""
@@ -457,11 +523,11 @@ class GimdowBLEConnection:
                 try:
                     await self._client.write_gatt_char(CHARACTERISTIC_WRITE, packet, False)
                 except Exception:
-                    _LOGGER.error("%s: Error sending packet", self.address, exc_info=True)
+                    _LOGGER.warning("%s: write_gatt_char failed — nulling client to force reconnect", self.address, exc_info=True)
                     # Null the client so _ensure_connected doesn't short-circuit on
                     # a stale is_connected=True when the proxy dropped the link silently.
                     self._client = None
                     raise BleakError()
             else:
-                _LOGGER.error("%s: Client disconnected during send", self.address)
+                _LOGGER.warning("%s: Client is None during send — connection was lost", self.address)
                 raise BleakError()
