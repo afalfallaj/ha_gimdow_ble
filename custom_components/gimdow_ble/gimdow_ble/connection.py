@@ -150,6 +150,35 @@ class GimdowBLEConnection:
         async with self._seq_num_lock:
             self._current_seq_num = 1
 
+    def _disconnect_reason(self, client: BleakClientWithServiceCache) -> str:
+        """Classify the likely cause of an unexpected disconnect.
+
+        Three scenarios with distinct causes and remedies:
+          - Weak signal  → device moved out of range; check RSSI trend.
+          - Mid-operation → write failure that triggered forced disconnect; look
+                            for preceding WARNING about DBus/send error.
+          - Proxy/device  → ESPHome proxy reset, device firmware reboot, or the
+                            lock's 30s idle timeout fired (keep-alive should prevent this).
+        """
+        rssi = self.rssi
+        if rssi is not None and rssi < -80:
+            return (
+                f"likely weak signal (RSSI {rssi} dBm — below -80 dBm threshold); "
+                "check device proximity and proxy placement"
+            )
+        if self._operation_lock.locked():
+            return (
+                "dropped while a command was in-flight "
+                "(check preceding WARNING for DBus/send error)"
+            )
+        # client.is_connected may already be False here; we can't distinguish
+        # proxy reset from device-initiated cleanly, so report both candidates.
+        return (
+            f"proxy or device initiated (RSSI {rssi} dBm); "
+            "possible causes: ESPHome proxy restart, device firmware reboot, "
+            "or 30s idle timeout (keep-alive should prevent the last one)"
+        )
+
     def _disconnected(self, client: BleakClientWithServiceCache) -> None:
         """BLE disconnected callback (called by bleak).
 
@@ -161,16 +190,20 @@ class GimdowBLEConnection:
         was_paired = self._is_paired
         self._is_paired = False
         self._cancel_keep_alive()
-        
+
         if self._expected_disconnect:
             _LOGGER.debug("%s: Expected disconnect; RSSI: %s", self.address, self.rssi)
             self._fire_disconnected_callbacks()
             return
-            
+
         self._client = None
-        _LOGGER.warning("%s: Unexpected disconnect; RSSI: %s", self.address, self.rssi)
+        _LOGGER.warning(
+            "%s: Unexpected disconnect — %s",
+            self.address,
+            self._disconnect_reason(client),
+        )
         self._fire_disconnected_callbacks()
-        
+
         if was_paired:
             _LOGGER.info("%s: Scheduling reconnect after unexpected disconnect", self.address)
             try:
