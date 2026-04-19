@@ -415,7 +415,12 @@ class GimdowBLEConnection:
                 _LOGGER.error("%s: Communication failed", self.address, exc_info=True)
                 raise
 
-    async def _resend_packets(self, packets: list[bytes]) -> None:
+    async def _resend_packets(self, packets: list[bytes], initial_delay: float = 0.0) -> None:
+        if self._expected_disconnect:
+            return
+        if initial_delay > 0:
+            _LOGGER.debug("%s: Waiting %.1fs before retry (proxy clear delay)", self.address, initial_delay)
+            await asyncio.sleep(initial_delay)
         if self._expected_disconnect:
             return
         await self._ensure_connected()
@@ -433,17 +438,17 @@ class GimdowBLEConnection:
                 self.address, BLEAK_BACKOFF_TIME, ex, self.rssi,
             )
             if self._is_paired:
-                self._create_safe_task(self._resend_packets(packets))
+                self._create_safe_task(self._resend_packets(packets, initial_delay=self._PROXY_CLEAR_DELAY))
             else:
-                self._create_safe_task(self._reconnect())
+                self._create_safe_task(self._reconnect(initial_delay=self._PROXY_CLEAR_DELAY))
         except BleakError as ex:
             _LOGGER.debug(
                 "%s: BleakError during send: %s; RSSI: %s", self.address, ex, self.rssi
             )
             if self._is_paired:
-                self._create_safe_task(self._resend_packets(packets))
+                self._create_safe_task(self._resend_packets(packets, initial_delay=self._PROXY_CLEAR_DELAY))
             else:
-                self._create_safe_task(self._reconnect())
+                self._create_safe_task(self._reconnect(initial_delay=self._PROXY_CLEAR_DELAY))
 
     async def _int_send_packets_locked(self, packets: list[bytes]) -> None:
         """Write raw GATT packets to the device."""
@@ -453,6 +458,9 @@ class GimdowBLEConnection:
                     await self._client.write_gatt_char(CHARACTERISTIC_WRITE, packet, False)
                 except Exception:
                     _LOGGER.error("%s: Error sending packet", self.address, exc_info=True)
+                    # Null the client so _ensure_connected doesn't short-circuit on
+                    # a stale is_connected=True when the proxy dropped the link silently.
+                    self._client = None
                     raise BleakError()
             else:
                 _LOGGER.error("%s: Client disconnected during send", self.address)
