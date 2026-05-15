@@ -1,6 +1,6 @@
 [project]
 name = "ha-gimdow-ble"
-version = "2.0.5"
+version = "2.1.0"
 description = "Home Assistant custom integration for Gimdow A1 Pro Max BLE smart lock"
 requires-python = ">=3.11"
 
