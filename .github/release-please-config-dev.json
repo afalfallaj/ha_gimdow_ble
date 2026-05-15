@@ -1,0 +1,27 @@
+{
+  "$schema": "https://raw.githubusercontent.com/googleapis/release-please/main/schemas/config.json",
+  "release-type": "python",
+  "package-name": "ha-gimdow-ble",
+  "prerelease": true,
+  "prerelease-type": "beta",
+  "changelog-sections": [
+    {"type": "feat",     "section": "### Features"},
+    {"type": "fix",      "section": "### Bug Fixes"},
+    {"type": "refactor", "section": "### Refactoring"},
+    {"type": "perf",     "section": "### Performance"},
+    {"type": "docs",     "section": "### Documentation"},
+    {"type": "chore",    "section": "### Maintenance", "hidden": true},
+    {"type": "test",     "section": "### Tests",       "hidden": true},
+    {"type": "ci",       "section": "### CI",          "hidden": true}
+  ],
+  "extra-files": [
+    {
+      "type": "json",
+      "path": "custom_components/gimdow_ble/manifest.json",
+      "jsonpath": "$.version"
+    }
+  ],
+  "packages": {
+    ".": {}
+  }
+}

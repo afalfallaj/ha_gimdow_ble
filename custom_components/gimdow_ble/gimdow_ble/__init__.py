@@ -15,7 +15,12 @@ from .exceptions import (
     GimdowBLEResolutionAbortedError,
 )
 
-__version__ = "2.0.5"
+import json as _json
+import pathlib as _pathlib
+
+__version__: str = _json.loads(
+    (_pathlib.Path(__file__).parent.parent / "manifest.json").read_text()
+)["version"]
 
 __all__ = [
     "AbstaractGimdowBLEDeviceManager",
