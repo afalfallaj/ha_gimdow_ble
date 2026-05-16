@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import logging
-import pycountry
 from typing import Any
 
 import voluptuous as vol
@@ -45,6 +44,7 @@ from .const import (
     CONF_ACCESS_SECRET,
     CONF_APP_TYPE,
     CONF_AUTH_TYPE,
+    CONF_AUTO_LOCK_DELAY_FALLBACK,
     CONF_CATEGORY,
     CONF_DEVICE_NAME,
     CONF_ENDPOINT,
@@ -59,9 +59,16 @@ from .const import (
     CONF_ADAPTER,
     CONF_UNKNOWN_STATE_ACTION,
     CONF_TRANSITION_TIMEOUT,
-    UNKNOWN_STATE_ACTION_RESOLVE,
-    UNKNOWN_STATE_ACTION_SKIP,
-    UNKNOWN_STATE_ACTION_FORCE_LOCK,
+    DEFAULT_AUTO_LOCK_DELAY_FALLBACK,
+    DEFAULT_UNKNOWN_STATE_ACTION,
+    UNKNOWN_STATE_ACTION_CONFIRM_LAST,
+    UNKNOWN_STATE_ACTION_DOUBLE_ON_ACTION,
+    UNKNOWN_STATE_ACTION_FORCE_LOCK_TWICE,
+    OPTIONS_ONLY_KEYS,
+    GIMDOW_CATEGORY,
+    GIMDOW_PRODUCT_ID,
+    GIMDOW_PRODUCT_MODEL,
+    GIMDOW_PRODUCT_NAME,
     DOMAIN,
     SMARTLIFE_APP,
     TUYA_COUNTRIES,
@@ -82,14 +89,16 @@ async def _try_login(
     errors: dict[str, str],
     placeholders: dict[str, Any],
 ) -> dict[str, Any] | None:
-    response: dict[Any, Any] | None
+    response: dict[Any, Any] | None = None
     data: dict[str, Any]
 
-    country = [
-        country
-        for country in TUYA_COUNTRIES
-        if country.name == user_input[CONF_COUNTRY_CODE]
-    ][0]
+    country = next(
+        (c for c in TUYA_COUNTRIES if c.name == user_input[CONF_COUNTRY_CODE]),
+        None,
+    )
+    if country is None:
+        errors["base"] = "invalid_auth"
+        return None
 
     data = {
         CONF_ENDPOINT: country.endpoint,
@@ -108,7 +117,7 @@ async def _try_login(
         else:
             data[CONF_AUTH_TYPE] = AuthType.SMART_HOME
 
-        response = await manager._login(data, True)
+        response = await manager.login_with_credentials(data, True)
 
         if response.get(TUYA_RESPONSE_SUCCESS, False):
             return data
@@ -140,16 +149,11 @@ def _show_login_form(
                 break
 
     def_country_name: str | None = None
-    try:
-        def_country = pycountry.countries.get(alpha_2=flow.hass.config.country)
-        if def_country:
-            def_country_name = def_country.name
-    except Exception:
-        pass
-
-    sensor_default = user_input.get(CONF_DOOR_SENSOR)
-    if sensor_default is None:
-        sensor_default = vol.UNDEFINED
+    if flow.hass.config.country:
+        for _c in TUYA_COUNTRIES:
+            if _c.country_code == flow.hass.config.country:
+                def_country_name = _c.name
+                break
 
     schema = {
         vol.Required(
@@ -159,25 +163,13 @@ def _show_login_form(
             # We don't pass a dict {code:name} because country codes can be duplicate.
             [country.name for country in TUYA_COUNTRIES]
         ),
-        vol.Required(
-            CONF_ACCESS_ID, default=user_input.get(CONF_ACCESS_ID, "")
-        ): str,
+        vol.Required(CONF_ACCESS_ID, default=user_input.get(CONF_ACCESS_ID, "")): str,
         vol.Required(
             CONF_ACCESS_SECRET,
             default=user_input.get(CONF_ACCESS_SECRET, ""),
         ): str,
-        vol.Required(
-            CONF_USERNAME, default=user_input.get(CONF_USERNAME, "")
-        ): str,
-        vol.Required(
-            CONF_PASSWORD, default=user_input.get(CONF_PASSWORD, "")
-        ): str,
-        vol.Optional(
-             CONF_DOOR_SENSOR,
-             default=sensor_default,
-        ): EntitySelector(
-            EntitySelectorConfig(domain="binary_sensor")
-        ),
+        vol.Required(CONF_USERNAME, default=user_input.get(CONF_USERNAME, "")): str,
+        vol.Required(CONF_PASSWORD, default=user_input.get(CONF_PASSWORD, "")): str,
     }
 
     return flow.async_show_form(
@@ -193,12 +185,20 @@ def _get_options_schema(hass, defaults: dict | None = None) -> vol.Schema:
     defaults = defaults or {}
     schema = {}
 
-    adapters = list(set([service_info.source for service_info in async_discovered_service_info(hass)]))
+    adapters = list(
+        set(
+            [
+                service_info.source
+                for service_info in async_discovered_service_info(hass)
+            ]
+        )
+    )
 
-    schema[vol.Optional(
-        CONF_ADAPTER,
-        description={"suggested_value": defaults.get(CONF_ADAPTER)}
-    )] = SelectSelector(
+    schema[
+        vol.Optional(
+            CONF_ADAPTER, description={"suggested_value": defaults.get(CONF_ADAPTER)}
+        )
+    ] = SelectSelector(
         SelectSelectorConfig(
             options=adapters,
             mode=SelectSelectorMode.DROPDOWN,
@@ -206,22 +206,28 @@ def _get_options_schema(hass, defaults: dict | None = None) -> vol.Schema:
         )
     )
 
-    schema[vol.Optional(
-        CONF_DOOR_SENSOR,
-        description={"suggested_value": defaults.get(CONF_DOOR_SENSOR)}
-    )] = EntitySelector(
-        EntitySelectorConfig(domain="binary_sensor")
-    )
+    schema[
+        vol.Optional(
+            CONF_DOOR_SENSOR,
+            description={"suggested_value": defaults.get(CONF_DOOR_SENSOR)},
+        )
+    ] = EntitySelector(EntitySelectorConfig(domain="binary_sensor"))
 
-    schema[vol.Optional(
-        CONF_UNKNOWN_STATE_ACTION,
-        description={"suggested_value": defaults.get(CONF_UNKNOWN_STATE_ACTION, UNKNOWN_STATE_ACTION_RESOLVE)}
-    )] = SelectSelector(
+    schema[
+        vol.Optional(
+            CONF_UNKNOWN_STATE_ACTION,
+            description={
+                "suggested_value": defaults.get(
+                    CONF_UNKNOWN_STATE_ACTION, DEFAULT_UNKNOWN_STATE_ACTION
+                )
+            },
+        )
+    ] = SelectSelector(
         SelectSelectorConfig(
             options=[
-                UNKNOWN_STATE_ACTION_RESOLVE,
-                UNKNOWN_STATE_ACTION_SKIP,
-                UNKNOWN_STATE_ACTION_FORCE_LOCK,
+                UNKNOWN_STATE_ACTION_CONFIRM_LAST,
+                UNKNOWN_STATE_ACTION_DOUBLE_ON_ACTION,
+                UNKNOWN_STATE_ACTION_FORCE_LOCK_TWICE,
             ],
             mode=SelectSelectorMode.DROPDOWN,
             custom_value=False,
@@ -229,13 +235,24 @@ def _get_options_schema(hass, defaults: dict | None = None) -> vol.Schema:
         )
     )
 
-    schema[vol.Optional(
-        CONF_TRANSITION_TIMEOUT,
-        default=defaults.get(CONF_TRANSITION_TIMEOUT, 60),
-    )] = NumberSelector(
-        NumberSelectorConfig(
-            min=0, max=300, step=1, mode=NumberSelectorMode.BOX
+    schema[
+        vol.Optional(
+            CONF_TRANSITION_TIMEOUT,
+            default=defaults.get(CONF_TRANSITION_TIMEOUT, 60),
         )
+    ] = NumberSelector(
+        NumberSelectorConfig(min=0, max=300, step=1, mode=NumberSelectorMode.BOX)
+    )
+
+    schema[
+        vol.Optional(
+            CONF_AUTO_LOCK_DELAY_FALLBACK,
+            default=defaults.get(
+                CONF_AUTO_LOCK_DELAY_FALLBACK, DEFAULT_AUTO_LOCK_DELAY_FALLBACK
+            ),
+        )
+    ] = NumberSelector(
+        NumberSelectorConfig(min=5, max=300, step=1, mode=NumberSelectorMode.BOX)
     )
 
     return vol.Schema(schema)
@@ -254,9 +271,13 @@ class GimdowBLEOptionsFlow(OptionsFlowWithReload):
             if CONF_ADAPTER not in user_input:
                 user_input[CONF_ADAPTER] = None
             if CONF_UNKNOWN_STATE_ACTION not in user_input:
-                user_input[CONF_UNKNOWN_STATE_ACTION] = UNKNOWN_STATE_ACTION_RESOLVE
+                user_input[CONF_UNKNOWN_STATE_ACTION] = DEFAULT_UNKNOWN_STATE_ACTION
             if CONF_TRANSITION_TIMEOUT not in user_input:
                 user_input[CONF_TRANSITION_TIMEOUT] = 60
+            if CONF_AUTO_LOCK_DELAY_FALLBACK not in user_input:
+                user_input[CONF_AUTO_LOCK_DELAY_FALLBACK] = (
+                    DEFAULT_AUTO_LOCK_DELAY_FALLBACK
+                )
 
             options = {**self.config_entry.options, **user_input}
             return self.async_create_entry(title="", data=options)
@@ -270,7 +291,7 @@ class GimdowBLEOptionsFlow(OptionsFlowWithReload):
 class GimdowBLEConfigFlow(ConfigFlow, domain=DOMAIN):
     """Handle a config flow for Gimdow BLE."""
 
-    VERSION = 1
+    VERSION = 4
 
     def __init__(self) -> None:
         """Initialize the config flow."""
@@ -304,7 +325,7 @@ class GimdowBLEConfigFlow(ConfigFlow, domain=DOMAIN):
     ) -> FlowResult:
         """Handle the user step."""
         if self._manager is None:
-             self._manager = HASSGimdowBLEDeviceManager(self.hass, self._data)
+            self._manager = HASSGimdowBLEDeviceManager(self.hass, self._data)
         await self._manager.build_cache()
         return self.async_show_menu(step_id="user", menu_options=["login", "manual"])
 
@@ -325,8 +346,6 @@ class GimdowBLEConfigFlow(ConfigFlow, domain=DOMAIN):
             )
             if data:
                 self._data.update(data)
-                if user_input.get(CONF_DOOR_SENSOR):
-                    self._data[CONF_DOOR_SENSOR] = user_input[CONF_DOOR_SENSOR]
                 return await self.async_step_device()
 
         if user_input is None:
@@ -338,7 +357,9 @@ class GimdowBLEConfigFlow(ConfigFlow, domain=DOMAIN):
                     True,
                 )
             if self._data is None or len(self._data) == 0:
-                self._manager.get_login_from_cache()
+                self._manager.get_login_from_cache(
+                    self._discovery_info.address if self._discovery_info else None
+                )
             if self._data is not None and len(self._data) > 0:
                 user_input.update(self._data)
 
@@ -366,10 +387,14 @@ class GimdowBLEConfigFlow(ConfigFlow, domain=DOMAIN):
                 self._get_device_info_error = True
                 errors["base"] = "device_not_registered"
             else:
+                opts = {k: v for k, v in self._data.items() if k in OPTIONS_ONLY_KEYS}
+                creds = {
+                    k: v for k, v in self._data.items() if k not in OPTIONS_ONLY_KEYS
+                }
                 return self.async_create_entry(
                     title=local_name,
-                    data={CONF_ADDRESS: discovery_info.address},
-                    options=self._data,
+                    data={CONF_ADDRESS: discovery_info.address, **creds},
+                    options=opts,
                 )
 
         if discovery := self._discovery_info:
@@ -381,7 +406,7 @@ class GimdowBLEConfigFlow(ConfigFlow, domain=DOMAIN):
                     discovery.address in current_addresses
                     or discovery.address in self._discovered_devices
                     or discovery.service_data is None
-                    or not SERVICE_UUID in discovery.service_data.keys()
+                    or SERVICE_UUID not in discovery.service_data.keys()
                 ):
                     continue
                 self._discovered_devices[discovery.address] = discovery
@@ -389,11 +414,9 @@ class GimdowBLEConfigFlow(ConfigFlow, domain=DOMAIN):
         if not self._discovered_devices:
             return self.async_abort(reason="no_unconfigured_devices")
 
-        def_address: str
-        if user_input:
-            def_address = user_input.get(CONF_ADDRESS)
-        else:
-            def_address = list(self._discovered_devices)[0]
+        def_address: str = (
+            user_input.get(CONF_ADDRESS) if user_input else None
+        ) or list(self._discovered_devices)[0]
 
         return self.async_show_form(
             step_id="device",
@@ -421,50 +444,44 @@ class GimdowBLEConfigFlow(ConfigFlow, domain=DOMAIN):
         """Handle the manual entry step."""
         errors: dict[str, str] = {}
         if user_input is not None:
-             address = user_input[CONF_ADDRESS]
-             await self.async_set_unique_id(address, raise_on_progress=False)
-             self._abort_if_unique_id_configured()
-             
-             # Create credentials dict
-             creds = {
-                 CONF_UUID: user_input[CONF_UUID],
-                 CONF_LOCAL_KEY: user_input[CONF_LOCAL_KEY],
-                 CONF_DEVICE_ID: user_input[CONF_DEVICE_ID],
-                 CONF_DEVICE_NAME: user_input.get(CONF_DEVICE_NAME, "Gimdow Lock"),
-                 CONF_CATEGORY: "jtmspro",
-                 CONF_PRODUCT_ID: "rlyxv7pe",
-                 CONF_PRODUCT_MODEL: "A1 PRO MAX",
-                 CONF_PRODUCT_NAME: "Gimdow Lock",
-                 CONF_FUNCTIONS: [],
-                 CONF_STATUS_RANGE: []
-             }
-             
-             self._data.update(user_input)
-             # Add credentials to manager data manually so they are saved
-             self._manager.data.update({
-                 f"{address}_credentials": creds
-             })
+            address = user_input[CONF_ADDRESS]
+            await self.async_set_unique_id(address, raise_on_progress=False)
+            self._abort_if_unique_id_configured()
 
-             return self.async_create_entry(
-                 title=user_input.get(CONF_DEVICE_NAME, "Gimdow Lock"),
-                 data={CONF_ADDRESS: address},
-                 options=self._manager.data,
-             )
+            # Create credentials dict
+            creds = {
+                CONF_UUID: user_input[CONF_UUID],
+                CONF_LOCAL_KEY: user_input[CONF_LOCAL_KEY],
+                CONF_DEVICE_ID: user_input[CONF_DEVICE_ID],
+                CONF_DEVICE_NAME: user_input.get(CONF_DEVICE_NAME, GIMDOW_PRODUCT_NAME),
+                CONF_CATEGORY: GIMDOW_CATEGORY,
+                CONF_PRODUCT_ID: GIMDOW_PRODUCT_ID,
+                CONF_PRODUCT_MODEL: GIMDOW_PRODUCT_MODEL,
+                CONF_PRODUCT_NAME: GIMDOW_PRODUCT_NAME,
+                CONF_FUNCTIONS: [],
+                CONF_STATUS_RANGE: [],
+            }
+
+            return self.async_create_entry(
+                title=user_input.get(CONF_DEVICE_NAME, GIMDOW_PRODUCT_NAME),
+                data={CONF_ADDRESS: address, **creds},
+                options={},
+            )
 
         # Populate address list
         current_addresses = self._async_current_ids()
         for discovery in async_discovered_service_info(self.hass):
-             if (
+            if (
                 discovery.address in current_addresses
                 or discovery.address in self._discovered_devices
                 or discovery.service_data is None
-                or not SERVICE_UUID in discovery.service_data.keys()
+                or SERVICE_UUID not in discovery.service_data.keys()
             ):
                 continue
-             self._discovered_devices[discovery.address] = discovery
-             
+            self._discovered_devices[discovery.address] = discovery
+
         addresses = list(self._discovered_devices.keys())
-        
+
         schema = {
             vol.Required(CONF_ADDRESS): SelectSelector(
                 SelectSelectorConfig(
@@ -473,9 +490,9 @@ class GimdowBLEConfigFlow(ConfigFlow, domain=DOMAIN):
                     custom_value=True,
                 )
             ),
-            vol.Required(CONF_UUID): str,
-            vol.Required(CONF_LOCAL_KEY): str,
-            vol.Required(CONF_DEVICE_ID): str,
+            vol.Required(CONF_UUID): vol.All(str, vol.Length(min=1)),
+            vol.Required(CONF_LOCAL_KEY): vol.All(str, vol.Length(min=1)),
+            vol.Required(CONF_DEVICE_ID): vol.All(str, vol.Length(min=1)),
             vol.Optional(CONF_DEVICE_NAME): str,
         }
 
@@ -485,9 +502,7 @@ class GimdowBLEConfigFlow(ConfigFlow, domain=DOMAIN):
             errors=errors,
         )
 
-    async def async_step_reauth(
-        self, entry_data: dict[str, Any]
-    ) -> FlowResult:
+    async def async_step_reauth(self, entry_data: dict[str, Any]) -> FlowResult:
         """Handle re-authentication with Tuya."""
         self._data.update(entry_data)
         return await self.async_step_reauth_confirm()
@@ -500,20 +515,28 @@ class GimdowBLEConfigFlow(ConfigFlow, domain=DOMAIN):
         placeholders: dict[str, Any] = {}
 
         if user_input is not None:
+            if self._manager is None:
+                self._manager = HASSGimdowBLEDeviceManager(self.hass, self._data)
+            await self._manager.build_cache()
             # Try to login with new credentials
             data = await _try_login(
-                self._manager if self._manager else HASSGimdowBLEDeviceManager(self.hass, self._data),
+                self._manager,
                 user_input,
                 errors,
                 placeholders,
             )
-            
+
             if data:
                 # Update the existing entry
-                entry = self.hass.config_entries.async_get_entry(self.context["entry_id"])
+                entry = self.hass.config_entries.async_get_entry(
+                    self.context["entry_id"]
+                )
+                if entry is None:
+                    return self.async_abort(reason="unknown_entry")
+                creds = {k: v for k, v in data.items() if k not in OPTIONS_ONLY_KEYS}
                 self.hass.config_entries.async_update_entry(
                     entry,
-                    data={**entry.data, **data},
+                    data={**entry.data, **creds},
                 )
                 self.hass.async_create_task(
                     self.hass.config_entries.async_reload(entry.entry_id)
@@ -522,12 +545,22 @@ class GimdowBLEConfigFlow(ConfigFlow, domain=DOMAIN):
 
         # Pre-fill with existing data if available
         if user_input is None:
-             user_input = {
-                 k: v for k, v in self._data.items() 
-                 if k in [CONF_ACCESS_ID, CONF_ACCESS_SECRET, CONF_USERNAME, CONF_PASSWORD, CONF_COUNTRY_CODE, CONF_DOOR_SENSOR]
-             }
+            user_input = {
+                k: v
+                for k, v in self._data.items()
+                if k
+                in [
+                    CONF_ACCESS_ID,
+                    CONF_ACCESS_SECRET,
+                    CONF_USERNAME,
+                    CONF_PASSWORD,
+                    CONF_COUNTRY_CODE,
+                ]
+            }
 
-        return _show_login_form(self, user_input, errors, placeholders, step_id="reauth_confirm")
+        return _show_login_form(
+            self, user_input, errors, placeholders, step_id="reauth_confirm"
+        )
 
     @staticmethod
     @callback
