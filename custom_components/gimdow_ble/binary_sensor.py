@@ -1,4 +1,5 @@
 """The Gimdow BLE integration."""
+
 from __future__ import annotations
 
 import logging
@@ -14,7 +15,7 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.event import async_track_state_change_event
 from homeassistant.helpers.dispatcher import async_dispatcher_send
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
-from homeassistant.const import STATE_ON, CONF_DEVICE_ID
+from homeassistant.const import STATE_ON
 
 from .const import DOMAIN, CONF_DOOR_SENSOR
 from .devices import GimdowBLEData, GimdowBLEEntity, GimdowBLEProductInfo
@@ -28,7 +29,6 @@ class GimdowBLEBinarySensor(GimdowBLEEntity, BinarySensorEntity):
 
     def __init__(
         self,
-        hass: HomeAssistant,
         coordinator: DataUpdateCoordinator,
         device: GimdowBLEDevice,
         product: GimdowBLEProductInfo,
@@ -39,9 +39,9 @@ class GimdowBLEBinarySensor(GimdowBLEEntity, BinarySensorEntity):
             key="door_sensor",
             device_class=BinarySensorDeviceClass.DOOR,
             icon="mdi:door",
-            name="Door Sensor",
+            translation_key="door_sensor",
         )
-        super().__init__(hass, coordinator, device, product, description)
+        super().__init__(coordinator, device, product, description)
         self._door_sensor = door_sensor
         self._data = data
         self._attr_is_on = None
@@ -74,12 +74,22 @@ class GimdowBLEBinarySensor(GimdowBLEEntity, BinarySensorEntity):
     def _update_state(self) -> None:
         """Update shared state and notify listeners."""
         if self._attr_is_on is None:
-             return
-             
+            return
+
         is_open = self._attr_is_on
-        
+
         self._data.is_door_open = is_open
         async_dispatcher_send(self.hass, self._data.door_update_signal, is_open)
+
+    @property
+    def available(self) -> bool:
+        """Return true once we have received at least one state reading.
+
+        Using hass.states.get() would return False during HA startup before the
+        referenced entity enters the state machine, causing spurious unavailable
+        → available transitions that could trigger automations.
+        """
+        return self._attr_is_on is not None
 
     @property
     def is_on(self) -> bool | None:
@@ -94,17 +104,18 @@ async def async_setup_entry(
 ) -> None:
     """Set up the Gimdow BLE binary sensors."""
     data: GimdowBLEData = hass.data[DOMAIN][entry.entry_id]
-    
-    door_sensor = entry.options.get(CONF_DOOR_SENSOR) or entry.data.get(CONF_DOOR_SENSOR)
-    
+
+    door_sensor = entry.options.get(CONF_DOOR_SENSOR)
+
     if door_sensor:
-        async_add_entities([
-            GimdowBLEBinarySensor(
-                hass,
-                data.coordinator,
-                data.device,
-                data.product,
-                door_sensor,
-                data=data,
-            )
-        ])
+        async_add_entities(
+            [
+                GimdowBLEBinarySensor(
+                    data.coordinator,
+                    data.device,
+                    data.product,
+                    door_sensor,
+                    data=data,
+                )
+            ]
+        )

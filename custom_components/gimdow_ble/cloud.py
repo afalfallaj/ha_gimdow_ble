@@ -1,6 +1,8 @@
 """The Gimdow BLE integration."""
+
 from __future__ import annotations
 
+import asyncio
 import logging
 
 from dataclasses import dataclass
@@ -8,7 +10,7 @@ import json
 from typing import Any, Iterable
 
 from homeassistant.const import (
-    CONF_ADDRESS, 
+    CONF_ADDRESS,
     CONF_DEVICE_ID,
     CONF_COUNTRY_CODE,
     CONF_PASSWORD,
@@ -17,12 +19,6 @@ from homeassistant.const import (
 
 from homeassistant.core import HomeAssistant
 
-from homeassistant.helpers.entity import DeviceInfo, EntityDescription
-from homeassistant.helpers.update_coordinator import (
-    CoordinatorEntity,
-    DataUpdateCoordinator,
-)
-
 from tuya_iot import (
     TuyaOpenAPI,
     AuthType,
@@ -30,7 +26,7 @@ from tuya_iot import (
 )
 
 from .gimdow_ble import (
-    AbstaractGimdowBLEDeviceManager,
+    AbstractGimdowBLEDeviceManager,
     GimdowBLEDeviceCredentials,
 )
 
@@ -91,16 +87,26 @@ CONF_TUYA_DEVICE_KEYS = [
     CONF_PRODUCT_MODEL,
 ]
 
-_cache: dict[str, TuyaCloudCacheItem] = {}
 
-
-class HASSGimdowBLEDeviceManager(AbstaractGimdowBLEDeviceManager):
+class HASSGimdowBLEDeviceManager(AbstractGimdowBLEDeviceManager):
     """Cloud connected manager of the Gimdow BLE devices credentials."""
 
     def __init__(self, hass: HomeAssistant, data: dict[str, Any]) -> None:
-        assert hass is not None
+        if hass is None:
+            raise ValueError("hass must not be None")
         self._hass = hass
         self._data = data
+
+    def _cloud_cache(self) -> dict[str, TuyaCloudCacheItem]:
+        """Return the shared cloud credential cache stored in hass.data."""
+        return self._hass.data.setdefault(DOMAIN, {}).setdefault("_cloud_cache", {})
+
+    def _cloud_lock(self) -> asyncio.Lock:
+        """Return (lazily creating) the shared asyncio.Lock for the cloud cache."""
+        domain_data = self._hass.data.setdefault(DOMAIN, {})
+        if "_cloud_lock" not in domain_data:
+            domain_data["_cloud_lock"] = asyncio.Lock()
+        return domain_data["_cloud_lock"]
 
     @staticmethod
     def _is_login_success(response: dict[Any, Any]) -> bool:
@@ -125,10 +131,10 @@ class HASSGimdowBLEDeviceManager(AbstaractGimdowBLEDeviceManager):
                 return False
         return True
 
-    async def _login(self, data: dict[str, Any], add_to_cache: bool) -> dict[Any, Any]:
-        """Login into Tuya cloud using credentials from data dictionary."""
-        global _cache
-
+    async def login_with_credentials(
+        self, data: dict[str, Any], add_to_cache: bool
+    ) -> dict[Any, Any]:
+        """Login into Tuya cloud using an explicit credentials dictionary."""
         if len(data) == 0:
             return {}
 
@@ -152,24 +158,26 @@ class HASSGimdowBLEDeviceManager(AbstaractGimdowBLEDeviceManager):
             _LOGGER.debug("Successful login for %s", data[CONF_USERNAME])
             if add_to_cache:
                 auth_type = data[CONF_AUTH_TYPE]
-                if type(auth_type) is AuthType:
+                if isinstance(auth_type, AuthType):
                     data[CONF_AUTH_TYPE] = auth_type.value
                 cache_key = self._get_cache_key(data)
-                cache_item = _cache.get(cache_key)
-                if cache_item:
-                    cache_item.api = api
-                    cache_item.login = data
-                else:
-                    _cache[cache_key] = TuyaCloudCacheItem(api, data, {})
+                async with self._cloud_lock():
+                    cache = self._cloud_cache()
+                    cache_item = cache.get(cache_key)
+                    if cache_item:
+                        cache_item.api = api
+                        cache_item.login = data
+                    else:
+                        cache[cache_key] = TuyaCloudCacheItem(api, data, {})
 
         return response
 
     def _check_login(self) -> bool:
         cache_key = self._get_cache_key(self._data)
-        return _cache.get(cache_key) != None
+        return self._cloud_cache().get(cache_key) is not None
 
     async def login(self, add_to_cache: bool = False) -> dict[Any, Any]:
-        return await self._login(self._data, add_to_cache)
+        return await self.login_with_credentials(self._data, add_to_cache)
 
     async def _fill_cache_item(self, item: TuyaCloudCacheItem) -> None:
         devices_response = await self._hass.async_add_executor_job(
@@ -206,11 +214,13 @@ class HASSGimdowBLEDeviceManager(AbstaractGimdowBLEDeviceManager):
                             }
 
                             spec_response = await self._hass.async_add_executor_job(
-                                    item.api.get,
-                                    TUYA_API_DEVICE_SPECIFICATION % device.get("id")
+                                item.api.get,
+                                TUYA_API_DEVICE_SPECIFICATION % device.get("id"),
                             )
 
-                            spec_response_result = spec_response.get(TUYA_RESPONSE_RESULT)
+                            spec_response_result = spec_response.get(
+                                TUYA_RESPONSE_RESULT
+                            )
                             if spec_response_result:
                                 functions = spec_response_result.get("functions")
                                 if functions:
@@ -220,37 +230,41 @@ class HASSGimdowBLEDeviceManager(AbstaractGimdowBLEDeviceManager):
                                     item.credentials[mac][CONF_STATUS_RANGE] = status
 
     async def build_cache(self) -> None:
-        global _cache
         data = {}
-        tuya_config_entries = self._hass.config_entries.async_entries(TUYA_DOMAIN)
-        for config_entry in tuya_config_entries:
-            data.clear()
-            data.update(config_entry.data)
-            key = self._get_cache_key(data)
-            item = _cache.get(key)
-            if item is None or len(item.credentials) == 0:
-                if self._is_login_success(await self._login(data, True)):
-                    item = _cache.get(key)
-                    if item and len(item.credentials) == 0:
-                        await self._fill_cache_item(item)
+        for domain in (TUYA_DOMAIN, DOMAIN):
+            for config_entry in self._hass.config_entries.async_entries(domain):
+                data.clear()
+                data.update(config_entry.data)
+                key = self._get_cache_key(data)
+                async with self._cloud_lock():
+                    item = self._cloud_cache().get(key)
+                    needs_fill = item is None or len(item.credentials) == 0
+                if needs_fill:
+                    if self._is_login_success(
+                        await self.login_with_credentials(data, True)
+                    ):
+                        async with self._cloud_lock():
+                            item = self._cloud_cache().get(key)
+                        if item and len(item.credentials) == 0:
+                            await self._fill_cache_item(item)
 
-        ble_config_entries = self._hass.config_entries.async_entries(DOMAIN)
-        for config_entry in ble_config_entries:
-            data.clear()
-            data.update(config_entry.options)
-            key = self._get_cache_key(data)
-            item = _cache.get(key)
-            if item is None or len(item.credentials) == 0:
-                if self._is_login_success(await self._login(data, True)):
-                    item = _cache.get(key)
-                    if item and len(item.credentials) == 0:
-                        await self._fill_cache_item(item)
+    def get_login_from_cache(self, address: str | None = None) -> None:
+        """Pre-populate self._data with login credentials from the shared cache.
 
-    def get_login_from_cache(self) -> None:
-        global _cache
-        for cache_item in _cache.values():
-            self._data.update(cache_item.login)
-            break
+        When an address is provided, prefer the cache entry whose credentials
+        contain that device — avoiding cross-account pre-fill in multi-account
+        setups.  Falls back to the sole cached entry when there is no ambiguity.
+        """
+        cache = self._cloud_cache()
+        if not cache:
+            return
+        if address:
+            for cache_item in cache.values():
+                if address.upper() in cache_item.credentials:
+                    self._data.update(cache_item.login)
+                    return
+        if len(cache) == 1:
+            self._data.update(next(iter(cache.values())).login)
 
     async def get_device_credentials(
         self,
@@ -259,33 +273,36 @@ class HASSGimdowBLEDeviceManager(AbstaractGimdowBLEDeviceManager):
         save_data: bool = False,
     ) -> GimdowBLEDeviceCredentials | None:
         """Get credentials of the Gimdow BLE device."""
-        global _cache
         item: TuyaCloudCacheItem | None = None
-        credentials: dict[str, any] | None = None
+        credentials: dict[str, Any] | None = None
         result: GimdowBLEDeviceCredentials | None = None
 
         if not force_update and self._has_credentials(self._data):
             credentials = self._data.copy()
         else:
             cache_key: str | None = None
-            if self._has_login(self._data):
-                cache_key = self._get_cache_key(self._data)
-            else:
-                for key in _cache.keys():
-                    if _cache[key].credentials.get(address) is not None:
-                        cache_key = key
-                        break
-            if cache_key:
-                item = _cache.get(cache_key)
+            async with self._cloud_lock():
+                cache = self._cloud_cache()
+                if self._has_login(self._data):
+                    cache_key = self._get_cache_key(self._data)
+                else:
+                    for key in cache:
+                        if cache[key].credentials.get(address) is not None:
+                            cache_key = key
+                            break
+                if cache_key:
+                    item = cache.get(cache_key)
 
             if item is None or force_update:
                 if self._is_login_success(await self.login(True)):
-                    item = _cache.get(cache_key)
+                    async with self._cloud_lock():
+                        item = self._cloud_cache().get(cache_key)
                     if item:
                         await self._fill_cache_item(item)
 
             if item:
-                credentials = item.credentials.get(address)
+                async with self._cloud_lock():
+                    credentials = item.credentials.get(address)
 
         if credentials:
             result = GimdowBLEDeviceCredentials(
