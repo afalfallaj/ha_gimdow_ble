@@ -1,9 +1,10 @@
 """The Gimdow BLE integration."""
+
 from __future__ import annotations
 
 import logging
 
-from bleak_retry_connector import BLEAK_RETRY_EXCEPTIONS as BLEAK_EXCEPTIONS, get_device
+from bleak_retry_connector import get_device
 
 from homeassistant.components import bluetooth
 from homeassistant.components.bluetooth.match import ADDRESS, BluetoothCallbackMatcher
@@ -15,17 +16,28 @@ from homeassistant.exceptions import ConfigEntryNotReady
 from .gimdow_ble import GimdowBLEDevice
 
 from .cloud import HASSGimdowBLEDeviceManager
-from .const import CONF_ADAPTER, DOMAIN, CONF_UNKNOWN_STATE_ACTION, CONF_TRANSITION_TIMEOUT, UNKNOWN_STATE_ACTION_RESOLVE
+from .const import (
+    CONF_ADAPTER,
+    CONF_AUTO_LOCK_DELAY_FALLBACK,
+    CONF_DOOR_SENSOR,
+    DEFAULT_AUTO_LOCK_DELAY_FALLBACK,
+    DOMAIN,
+    CONF_UNKNOWN_STATE_ACTION,
+    CONF_TRANSITION_TIMEOUT,
+    OPTIONS_ONLY_KEYS,
+    DEFAULT_UNKNOWN_STATE_ACTION,
+    UNKNOWN_STATE_ACTION_CONFIRM_LAST,
+)
 from .devices import GimdowBLECoordinator, GimdowBLEData, get_device_product_info
 
 PLATFORMS: list[Platform] = [
     Platform.BUTTON,
     Platform.NUMBER,
     Platform.SENSOR,
+    Platform.BINARY_SENSOR,
     Platform.LOCK,
     Platform.SELECT,
     Platform.SWITCH,
-    Platform.BINARY_SENSOR,
 ]
 
 _LOGGER = logging.getLogger(__name__)
@@ -41,7 +53,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         raise ConfigEntryNotReady(
             f"Could not find Gimdow BLE device with address {address}"
         )
-    manager = HASSGimdowBLEDeviceManager(hass, entry.options.copy())
+    manager = HASSGimdowBLEDeviceManager(hass, entry.data.copy())
     device = GimdowBLEDevice(manager, ble_device)
     await device.initialize()
     product_info = get_device_product_info(device)
@@ -56,7 +68,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         change: bluetooth.BluetoothChange,
     ) -> None:
         """Update from a ble callback."""
-        if (adapter := entry.options.get(CONF_ADAPTER)) and service_info.source != adapter:
+        if (
+            adapter := entry.options.get(CONF_ADAPTER)
+        ) and service_info.source != adapter:
             return
 
         device.set_ble_device_and_advertisement_data(
@@ -78,11 +92,19 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         product_info,
         manager,
         coordinator,
-        door_update_signal=f"gimdow_door_update_{device.device_id}",
-        virtual_auto_lock_signal=f"gimdow_virtual_auto_lock_{device.device_id}",
-        virtual_auto_lock_time_signal=f"gimdow_virtual_auto_lock_time_{device.device_id}",
-        unknown_state_action=entry.options.get(CONF_UNKNOWN_STATE_ACTION, UNKNOWN_STATE_ACTION_RESOLVE),
-        transition_timeout=entry.options.get(CONF_TRANSITION_TIMEOUT, 60),
+        door_update_signal=f"gimdow_door_update_{device.address}",
+        virtual_auto_lock_signal=f"gimdow_virtual_auto_lock_{device.address}",
+        virtual_auto_lock_time_signal=f"gimdow_virtual_auto_lock_time_{device.address}",
+        has_door_sensor=bool(entry.options.get(CONF_DOOR_SENSOR)),
+        unknown_state_action=entry.options.get(
+            CONF_UNKNOWN_STATE_ACTION, DEFAULT_UNKNOWN_STATE_ACTION
+        ),
+        transition_timeout=int(entry.options.get(CONF_TRANSITION_TIMEOUT, 60)),
+        auto_lock_delay_fallback=int(
+            entry.options.get(
+                CONF_AUTO_LOCK_DELAY_FALLBACK, DEFAULT_AUTO_LOCK_DELAY_FALLBACK
+            )
+        ),
     )
 
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
@@ -97,13 +119,55 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     return True
 
 
-
-
-
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Unload a config entry."""
     if unload_ok := await hass.config_entries.async_unload_platforms(entry, PLATFORMS):
         data: GimdowBLEData = hass.data[DOMAIN].pop(entry.entry_id)
+        data.coordinator.stop()
         await data.device.stop()
 
     return unload_ok
+
+
+async def async_migrate_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
+    """Migrate config entry to the current version."""
+    _LOGGER.debug("Migrating config entry from version %s", entry.version)
+    if entry.version > 4:
+        _LOGGER.error(
+            "Cannot migrate config entry %s from version %s",
+            entry.entry_id,
+            entry.version,
+        )
+        return False
+
+    if entry.version == 1:
+        old_options = dict(entry.options)
+        new_data = dict(entry.data)
+        new_options = {}
+        for k, v in old_options.items():
+            if k in OPTIONS_ONLY_KEYS:
+                new_options[k] = v
+            else:
+                new_data[k] = v
+        hass.config_entries.async_update_entry(
+            entry, data=new_data, options=new_options, version=2
+        )
+        _LOGGER.info("Migrated config entry %s to version 2", entry.entry_id)
+
+    if entry.version == 2:
+        # Move CONF_DOOR_SENSOR from entry.data to entry.options if present
+        new_data = dict(entry.data)
+        new_options = dict(entry.options)
+        if CONF_DOOR_SENSOR in new_data:
+            new_options.setdefault(CONF_DOOR_SENSOR, new_data.pop(CONF_DOOR_SENSOR))
+        hass.config_entries.async_update_entry(
+            entry, data=new_data, options=new_options, version=3
+        )
+        _LOGGER.info("Migrated config entry %s to version 3", entry.entry_id)
+
+    if entry.version == 3:
+        # No data shape change; version bump required for new config_flow.py VERSION=4
+        hass.config_entries.async_update_entry(entry, version=4)
+        _LOGGER.info("Migrated config entry %s to version 4", entry.entry_id)
+
+    return True

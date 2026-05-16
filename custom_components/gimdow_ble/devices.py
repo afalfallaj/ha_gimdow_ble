@@ -1,72 +1,73 @@
 """The Gimdow BLE integration."""
+
 from __future__ import annotations
+import asyncio
 from dataclasses import dataclass, field
-from datetime import timedelta
-from typing import Any
-from .gimdow_ble import GimdowBLEDataPointType
-
+from typing import TYPE_CHECKING, Callable, Generic, TypeVar
 import logging
-from homeassistant.const import CONF_ADDRESS, CONF_DEVICE_ID
 
+from homeassistant.components.persistent_notification import (
+    async_create as pn_async_create,
+    async_dismiss as pn_async_dismiss,
+)
 from homeassistant.core import CALLBACK_TYPE, HomeAssistant, callback
 from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers.entity import (
     DeviceInfo,
     EntityDescription,
-    generate_entity_id,
 )
 from homeassistant.helpers.event import async_call_later
 from homeassistant.helpers.update_coordinator import (
     CoordinatorEntity,
     DataUpdateCoordinator,
+    UpdateFailed,
 )
 
-from home_assistant_bluetooth import BluetoothServiceInfoBleak
 from .gimdow_ble import (
-    AbstaractGimdowBLEDeviceManager,
+    AbstractGimdowBLEDeviceManager,
     GimdowBLEDataPoint,
     GimdowBLEDevice,
     GimdowBLEDeviceCredentials,
 )
+from .gimdow_ble.const import DP_LOCK_MOTOR_STATE
 
-from .cloud import HASSGimdowBLEDeviceManager
+if TYPE_CHECKING:
+    from home_assistant_bluetooth import BluetoothServiceInfoBleak
+    from .cloud import HASSGimdowBLEDeviceManager
 from .const import (
+    DEFAULT_AUTO_LOCK_DELAY_FALLBACK,
     DEVICE_DEF_MANUFACTURER,
     DOMAIN,
     SET_DISCONNECTED_DELAY,
-    DPCode,
-    DPType,
-    UNKNOWN_STATE_ACTION_RESOLVE,
+    DEFAULT_UNKNOWN_STATE_ACTION,
+    UNKNOWN_STATE_ACTION_CONFIRM_LAST,
 )
-
-from .base import IntegerTypeData, EnumTypeData
-from .gimdow_ble import GimdowBLEDataPointType, GimdowBLEDevice
 
 _LOGGER = logging.getLogger(__name__)
 
-
-
+# Entity keys that remain available when BLE is disconnected.
+# Sensors report last-known readings; door_sensor mirrors an HA entity (no BLE dependency).
+_PERSISTENT_ENTITY_KEYS = frozenset({"battery_state", "signal_strength", "door_sensor"})
 
 
 @dataclass
 class GimdowBLEProductInfo:
     name: str
     manufacturer: str = DEVICE_DEF_MANUFACTURER
-    lock: int | None = None
+    is_lock: bool = False
+
 
 class GimdowBLEEntity(CoordinatorEntity):
     """Gimdow BLE base entity."""
 
     def __init__(
         self,
-        hass: HomeAssistant,
         coordinator: GimdowBLECoordinator,
         device: GimdowBLEDevice,
         product: GimdowBLEProductInfo,
         description: EntityDescription,
     ) -> None:
         super().__init__(coordinator)
-        self._hass = hass
         self._coordinator = coordinator
         self._device = device
         self._product = product
@@ -76,34 +77,18 @@ class GimdowBLEEntity(CoordinatorEntity):
         self._attr_has_entity_name = True
         self._attr_device_info = get_device_info(self._device)
         self._attr_unique_id = f"{self._device.device_id}-{description.key}"
-        domain = "lock" if "Lock" in self.__class__.__name__ else "sensor"
-        self.entity_id = generate_entity_id(
-            f"{domain}.{{}}", self._attr_unique_id, hass=hass
-        )
-        if product.lock:
-             pass
 
     @property
     def available(self) -> bool:
-        """Return if entity is available."""
-        """Return if entity is available."""
-        # For Gimdow lock (specifically A1 PRO MAX), non-lock entities (battery, etc.) 
-        # should persist state even when disconnected/sleeping.
-        # Lock entity itself (DP 47) should show unavailable to avoid false security.
-        is_gimdow = (
-            self._product.lock 
-            and self.entity_description.key != "lock"
-        )
-        if is_gimdow:
-             return True
-        
-        # _LOGGER.debug(
-        #     "Entity %s available check: connected=%s, product.lock=%s, product_id=%s", 
-        #     self.entity_id, 
-        #     self._coordinator.connected,
-        #     self._product.lock if self._product else "None",
-        #     self._device.product_id
-        # )
+        """Return if entity is available.
+
+        Sensor/binary_sensor entities in _PERSISTENT_ENTITY_KEYS stay available when
+        BLE is sleeping — they report last-known values rather than showing unavailable.
+        All other entities (lock, buttons, switches, numbers, selects) follow live BLE
+        connectivity, preventing misleading "available" state when the device is unreachable.
+        """
+        if self.entity_description.key in _PERSISTENT_ENTITY_KEYS:
+            return True
         return self._coordinator.connected
 
     @property
@@ -116,141 +101,6 @@ class GimdowBLEEntity(CoordinatorEntity):
         """Handle updated data from the coordinator."""
         self.async_write_ha_state()
 
-    def send_dp_value(self,
-        key: DPCode | None,
-        type: GimdowBLEDataPointType,
-        value: bytes | bool | int | str | None = None) -> None:
-
-        dpid = self.find_dpid(key)
-        if dpid is not None:
-            datapoint = self._device.datapoints.get_or_create(
-                    dpid,
-                    type,
-                    value,
-                )
-            self._hass.async_create_task(datapoint.set_value(value))
-
-    
-    def _send_command(self, commands : list[dict[str, Any]]) -> None:
-        """Send the commands to the device"""
-        for command in commands:
-            code = command.get("code")
-            value = command.get("value")
-
-            if code and value is not None:
-                dttype = self.get_dptype(code)
-                if isinstance(value, str):
-                    # We suppose here that cloud JSON type are sent as string
-                    if dttype == DPType.STRING or dttype == DPType.JSON:
-                        self.send_dp_value(code, GimdowBLEDataPointType.DT_STRING, value)
-                    elif dttype == DPType.ENUM:
-                        int_value = 0
-                        values = self.device.function[code].values
-                        if isinstance(self.device.function[code].values, dict):
-                            range = self.device.function[code].values.get("range")
-                            if isinstance(range, list):
-                                int_value = range.index(value) if value in range else None
-                        self.send_dp_value(code, GimdowBLEDataPointType.DT_ENUM, int_value)
-
-                elif isinstance(value, bool):
-                    self.send_dp_value(code, GimdowBLEDataPointType.DT_BOOL, value)
-                else:
-                    self.send_dp_value(code, GimdowBLEDataPointType.DT_VALUE, value)
-
-
-    def find_dpid(
-        self, dpcode: DPCode | None, prefer_function: bool = False
-    ) -> int | None:
-        """Returns the dp id for the given code"""
-        if dpcode is None:
-            return None
-
-        order = ["status_range", "function"]
-        if prefer_function:
-            order = ["function", "status_range"]
-        for key in order:
-            if dpcode in getattr(self.device, key):
-                return getattr(self.device, key)[dpcode].dp_id
-
-        return None
-
-    def find_dpcode(
-        self,
-        dpcodes: str | DPCode | tuple[DPCode, ...] | None,
-        *,
-        prefer_function: bool = False,
-        dptype: DPType | None = None,
-    ) -> DPCode | EnumTypeData | IntegerTypeData | None:
-        """Find a matching DP code available on for this device."""
-        if dpcodes is None:
-            return None
-
-        if isinstance(dpcodes, str):
-            dpcodes = (DPCode(dpcodes),)
-        elif not isinstance(dpcodes, tuple):
-            dpcodes = (dpcodes,)
-
-        order = ["status_range", "function"]
-        if prefer_function:
-            order = ["function", "status_range"]
-
-        # When we are not looking for a specific datatype, we can append status for
-        # searching
-        if not dptype:
-            order.append("status")
-
-        for dpcode in dpcodes:
-            for key in order:
-                if dpcode not in getattr(self.device, key):
-                    continue
-                if (
-                    dptype == DPType.ENUM
-                    and getattr(self.device, key)[dpcode].type == DPType.ENUM
-                ):
-                    if not (
-                        enum_type := EnumTypeData.from_json(
-                            dpcode, getattr(self.device, key)[dpcode].values
-                        )
-                    ):
-                        continue
-                    return enum_type
-
-                if (
-                    dptype == DPType.INTEGER
-                    and getattr(self.device, key)[dpcode].type == DPType.INTEGER
-                ):
-                    if not (
-                        integer_type := IntegerTypeData.from_json(
-                            dpcode, getattr(self.device, key)[dpcode].values
-                        )
-                    ):
-                        continue
-                    return integer_type
-
-                if dptype not in (DPType.ENUM, DPType.INTEGER):
-                    return dpcode
-
-        return None
-
-
-    def get_dptype(
-        self, dpcode: DPCode | None, prefer_function: bool = False
-    ) -> DPType | None:
-        """Find a matching DPCode data type available on for this device."""
-        if dpcode is None:
-            return None
-
-        order = ["status_range", "function"]
-        if prefer_function:
-            order = ["function", "status_range"]
-        for key in order:
-            if dpcode in getattr(self.device, key):
-                return DPType(getattr(self.device, key)[dpcode].type)
-
-        return None
-
-
-
 
 class GimdowBLECoordinator(DataUpdateCoordinator[GimdowBLEDevice]):
     """Data coordinator for receiving Gimdow BLE updates."""
@@ -261,37 +111,73 @@ class GimdowBLECoordinator(DataUpdateCoordinator[GimdowBLEDevice]):
             hass,
             _LOGGER,
             name=DOMAIN,
-            update_interval=timedelta(seconds=60),
+            update_interval=None,
         )
         self._device = device
         self._disconnected: bool = True
         self._unsub_disconnect: CALLBACK_TYPE | None = None
-        device.register_connected_callback(self._async_handle_connect)
-        device.register_callback(self._async_handle_update)
-        device.register_disconnected_callback(self._async_handle_disconnect)
+        self._unregister_callbacks: list[Callable[[], None]] = [
+            device.register_connected_callback(self._async_handle_connect),
+            device.register_callback(self._async_handle_update),
+            device.register_disconnected_callback(self._async_handle_disconnect),
+        ]
 
     @property
     def connected(self) -> bool:
         return not self._disconnected
 
-    @callback
-    def _async_handle_connect(self) -> None:
+    def stop(self) -> None:
+        """Unregister all device callbacks and cancel pending timers."""
+        for unregister in self._unregister_callbacks:
+            unregister()
+        self._unregister_callbacks.clear()
         if self._unsub_disconnect is not None:
             self._unsub_disconnect()
+            self._unsub_disconnect = None
+
+    @callback
+    def _async_handle_connect(self) -> None:
+        pn_async_dismiss(self.hass, f"gimdow_ble_disconnected_{self._device.address}")
+        if self._unsub_disconnect is not None:
+            self._unsub_disconnect()
+            self._unsub_disconnect = None
         if self._disconnected:
+            # DP47 (lock_motor_state) is push-only and never sent by the device on
+            # reconnect. Clear the stale pre-disconnect value so is_locked returns None
+            # until the device pushes DP47 again (command echo or manual operation).
+            self._device.datapoints.clear(DP_LOCK_MOTOR_STATE)
             self._disconnected = False
             self.async_update_listeners()
+            # Refresh diagnostics (DP9 battery etc.) after reconnect. DP47 won't
+            # be returned by the device, but other DPs will be updated.
+            self._device.schedule_update(name="post-reconnect-update")
 
     async def _async_update_data(self) -> GimdowBLEDevice:
         """Fetch data from the device."""
-        # Polling logic
-        await self._device.update()
+        try:
+            await asyncio.wait_for(self._device.update(), timeout=30)
+        except asyncio.TimeoutError:
+            # Sleeping locks won't respond during the initial poll; that is expected
+            # and should not prevent the entry from loading.
+            _LOGGER.debug(
+                "Initial update timed out for %s — device may be sleeping",
+                self._device.address,
+            )
+        except Exception as err:
+            raise UpdateFailed(f"Error polling {self._device.address}: {err}") from err
         return self._device
 
     @callback
     def _async_handle_update(self, updates: list[GimdowBLEDataPoint]) -> None:
-        """Just trigger the callbacks."""
-        self._async_handle_connect()
+        """Trigger coordinator listeners on device DP push.
+
+        Data arriving proves the BLE session is still alive — cancel any
+        pending disconnect grace timer, but do not duplicate the connect
+        handshake that _async_handle_connect already handles.
+        """
+        if self._unsub_disconnect is not None:
+            self._unsub_disconnect()
+            self._unsub_disconnect = None
         self.async_set_updated_data(self._device)
 
     @callback
@@ -299,6 +185,16 @@ class GimdowBLECoordinator(DataUpdateCoordinator[GimdowBLEDevice]):
         """Invoke the idle timeout callback, called when the alarm fires."""
         self._disconnected = True
         self._unsub_disconnect = None
+        pn_async_create(
+            self.hass,
+            message=(
+                f"The Gimdow lock at {self._device.address} has been unreachable "
+                f"for {SET_DISCONNECTED_DELAY // 60} minutes. "
+                "Check BLE range and adapter status."
+            ),
+            title="Gimdow Lock Unreachable",
+            notification_id=f"gimdow_ble_disconnected_{self._device.address}",
+        )
         self.async_update_listeners()
 
     @callback
@@ -325,14 +221,15 @@ class GimdowBLEData:
     virtual_auto_lock_time_signal: str
     virtual_auto_lock: bool = False
     is_door_open: bool | None = None
-    unknown_state_action: str = UNKNOWN_STATE_ACTION_RESOLVE
+    has_door_sensor: bool = False
+    unknown_state_action: str = DEFAULT_UNKNOWN_STATE_ACTION
     transition_timeout: int = 60
+    auto_lock_delay_fallback: int = DEFAULT_AUTO_LOCK_DELAY_FALLBACK
 
 
 @dataclass
 class GimdowBLECategoryInfo:
     products: dict[str, GimdowBLEProductInfo]
-    info: GimdowBLEProductInfo | None = None
 
 
 devices_database: dict[str, GimdowBLECategoryInfo] = {
@@ -342,21 +239,19 @@ devices_database: dict[str, GimdowBLECategoryInfo] = {
             GimdowBLEProductInfo(
                 name="A1 PRO MAX",
                 # Gimdow identity
-                lock=1,
+                is_lock=True,
             ),
         },
     ),
 }
+
 
 def get_product_info_by_ids(
     category: str, product_id: str
 ) -> GimdowBLEProductInfo | None:
     category_info = devices_database.get(category)
     if category_info is not None:
-        product_info = category_info.products.get(product_id)
-        if product_info is not None:
-            return product_info
-        return category_info.info
+        return category_info.products.get(product_id)
     else:
         return None
 
@@ -366,13 +261,12 @@ def get_device_product_info(device: GimdowBLEDevice) -> GimdowBLEProductInfo | N
 
 
 def get_short_address(address: str) -> str:
-    results = address.replace("-", ":").upper().split(":")
-    return f"{results[-3]}{results[-2]}{results[-1]}"[-6:]
+    return address.replace("-", ":").upper().replace(":", "")[-6:]
 
 
 async def get_device_readable_name(
     discovery_info: BluetoothServiceInfoBleak,
-    manager: AbstaractGimdowBLEDeviceManager | None,
+    manager: AbstractGimdowBLEDeviceManager | None,
 ) -> str:
     credentials: GimdowBLEDeviceCredentials | None = None
     product_info: GimdowBLEProductInfo | None = None
@@ -385,10 +279,10 @@ async def get_device_readable_name(
             )
     short_address = get_short_address(discovery_info.address)
     if product_info:
-        return "%s %s" % (product_info.name, short_address)
+        return f"{product_info.name} {short_address}"
     if credentials:
-        return "%s %s" % (credentials.device_name, short_address)
-    return "%s %s" % (discovery_info.device.name, short_address)
+        return f"{credentials.device_name} {short_address}"
+    return f"{discovery_info.device.name} {short_address}"
 
 
 def get_device_info(device: GimdowBLEDevice) -> DeviceInfo | None:
@@ -407,20 +301,41 @@ def get_device_info(device: GimdowBLEDevice) -> DeviceInfo | None:
         manufacturer=(
             product_info.manufacturer if product_info else DEVICE_DEF_MANUFACTURER
         ),
-        model=("%s (%s)")
-        % (
-            device.product_model or product_name,
-            device.product_id,
-        ),
-        name=("%s %s")
-        % (
-            product_name,
-            get_short_address(device.address),
-        ),
-        sw_version=("%s (protocol %s)")
-        % (
-            device.device_version,
-            device.protocol_version,
-        ),
+        model=f"{device.product_model or product_name} ({device.product_id})",
+        name=f"{product_name} {get_short_address(device.address)}",
+        sw_version=f"{device.device_version} (protocol {device.protocol_version})",
     )
     return result
+
+
+# ---------------------------------------------------------------------------
+# Generic platform mapping helpers
+# ---------------------------------------------------------------------------
+
+_T = TypeVar("_T")
+
+
+@dataclass
+class GimdowBLECategoryMapping(Generic[_T]):
+    """Generic category → (product → mapping) lookup table.
+
+    Replaces per-platform GimdowBLECategoryXMapping dataclasses.
+    """
+
+    products: dict[str, list[_T]] | None = None
+    mapping: list[_T] | None = None
+
+
+def get_platform_mapping(
+    table: dict[str, GimdowBLECategoryMapping[_T]],
+    device: GimdowBLEDevice,
+) -> list[_T]:
+    """Two-level lookup: category → product_id → fallback to category default."""
+    cat = table.get(device.category)
+    if cat is None:
+        return []
+    if cat.products:
+        result = cat.products.get(device.product_id)
+        if result is not None:
+            return result
+    return cat.mapping or []

@@ -9,10 +9,10 @@ This file contains only:
   - ``GimdowBLELock`` — HA LockEntity delegate (~70 lines)
   - ``async_setup_entry`` — HA platform setup
 """
+
 from __future__ import annotations
 
 import logging
-import time
 from dataclasses import dataclass
 
 from homeassistant.components.lock import LockEntity, LockEntityDescription
@@ -20,13 +20,23 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.dispatcher import async_dispatcher_connect
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
+from homeassistant.helpers.restore_state import RestoreEntity
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
 
 from .const import DOMAIN
-from .devices import GimdowBLEData, GimdowBLEEntity, GimdowBLEProductInfo
+from .devices import (
+    GimdowBLECategoryMapping,
+    GimdowBLEData,
+    GimdowBLEEntity,
+    GimdowBLEProductInfo,
+    get_platform_mapping,
+)
 from .gimdow_ble import GimdowBLEDataPointType, GimdowBLEDevice
-from .gimdow_ble.diagnostics import GimdowBLEDiagContext
-from .gimdow_ble.lock_manager import GimdowBLELockManager, LockBlockedReason
+from .gimdow_ble.lock_manager import (
+    GimdowBLELockManager,
+    LockBlockedReason,
+    LockManagerConfig,
+)
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -34,6 +44,7 @@ _LOGGER = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 # Mapping config (HA data — not business logic)
 # ---------------------------------------------------------------------------
+
 
 @dataclass
 class GimdowBLELockMapping:
@@ -49,13 +60,7 @@ class GimdowBLELockMapping:
     lock_value: int | bool = True
 
 
-@dataclass
-class GimdowBLECategoryLockMapping:
-    """Mapping from product ID to list of lock entity configs."""
-
-    products: dict[str, list[GimdowBLELockMapping]] | None = None
-    mapping: list[GimdowBLELockMapping] | None = None
-
+GimdowBLECategoryLockMapping = GimdowBLECategoryMapping[GimdowBLELockMapping]
 
 mapping: dict[str, GimdowBLECategoryLockMapping] = {
     "jtmspro": GimdowBLECategoryLockMapping(
@@ -77,22 +82,15 @@ mapping: dict[str, GimdowBLECategoryLockMapping] = {
 
 def get_mapping_by_device(device: GimdowBLEDevice) -> list[GimdowBLELockMapping]:
     """Return the lock mappings for a specific device."""
-    cat = mapping.get(device.category)
-    if cat is not None:
-        if cat.products:
-            product_mapping = cat.products.get(device.product_id)
-            if product_mapping:
-                return product_mapping
-        if cat.mapping:
-            return cat.mapping
-    return []
+    return get_platform_mapping(mapping, device)
 
 
 # ---------------------------------------------------------------------------
 # Lock Entity
 # ---------------------------------------------------------------------------
 
-class GimdowBLELock(GimdowBLEEntity, LockEntity):
+
+class GimdowBLELock(GimdowBLEEntity, LockEntity, RestoreEntity):
     """Representation of a Gimdow BLE Lock.
 
     This class is a thin HA delegate. All state machine logic,
@@ -109,23 +107,35 @@ class GimdowBLELock(GimdowBLEEntity, LockEntity):
         lock_mapping: GimdowBLELockMapping,
         data: GimdowBLEData,
     ) -> None:
-        super().__init__(hass, coordinator, device, product, lock_mapping.description)
+        super().__init__(coordinator, device, product, lock_mapping.description)
         self._mapping = lock_mapping
         self._data = data
         self._last_is_locked: bool | None = None
         self._attr_changed_by: str | None = None
+        self._was_connected: bool = False
 
         self._lock_manager = GimdowBLELockManager(
             device=device,
             hass=hass,
-            data=data,
-            mapping=lock_mapping,
+            config=LockManagerConfig(
+                unknown_state_action=data.unknown_state_action,
+                transition_timeout=data.transition_timeout,
+                auto_lock_delay_fallback=data.auto_lock_delay_fallback,
+                lock_dp_id=lock_mapping.lock_dp_id,
+                unlock_dp_id=lock_mapping.unlock_dp_id,
+                state_dp_id=lock_mapping.state_dp_id,
+                lock_value=lock_mapping.lock_value,
+                unlock_value=lock_mapping.unlock_value,
+                get_auto_lock=lambda: data.virtual_auto_lock,
+                has_door_sensor=data.has_door_sensor,
+            ),
             on_state_change=self.async_write_ha_state,
         )
 
         _LOGGER.debug(
             "[%s] GimdowBLELock initialized. unknown_state_action=%s",
-            self._device.address, data.unknown_state_action,
+            self._device.address,
+            data.unknown_state_action,
         )
 
     # ------------------------------------------------------------------
@@ -135,6 +145,15 @@ class GimdowBLELock(GimdowBLEEntity, LockEntity):
     async def async_added_to_hass(self) -> None:
         await super().async_added_to_hass()
 
+        if (last_state := await self.async_get_last_state()) is not None:
+            if last_state.state == "locked":
+                self._lock_manager.restore_last_known_state(True)
+            elif last_state.state == "unlocked":
+                self._lock_manager.restore_last_known_state(False)
+
+        self.async_on_remove(
+            self._device.register_connected_callback(self._on_ble_reconnected)
+        )
         self.async_on_remove(
             async_dispatcher_connect(
                 self.hass,
@@ -158,14 +177,35 @@ class GimdowBLELock(GimdowBLEEntity, LockEntity):
         )
 
         if self._data.is_door_open is not None:
-            _LOGGER.debug("[%s] Initial door state: is_open=%s", self._device.address, self._data.is_door_open)
+            _LOGGER.debug(
+                "[%s] Initial door state: is_open=%s",
+                self._device.address,
+                self._data.is_door_open,
+            )
             self._lock_manager.on_door_changed(self._data.is_door_open)
         else:
-            _LOGGER.debug("[%s] Initial door state: unknown (assuming closed)", self._device.address)
+            _LOGGER.debug(
+                "[%s] Initial door state: unknown (assuming closed)",
+                self._device.address,
+            )
+
+    async def async_will_remove_from_hass(self) -> None:
+        self._lock_manager.cleanup()
 
     # ------------------------------------------------------------------
-    # Dispatcher callbacks — thin wrappers, delegate to lock manager
+    # BLE + Dispatcher callbacks — thin wrappers, delegate to lock manager
     # ------------------------------------------------------------------
+
+    @callback
+    def _on_ble_reconnected(self) -> None:
+        """Fire on every BLE-level handshake, bypassing the coordinator grace window.
+
+        The coordinator only marks the device disconnected after 10 minutes, so
+        _handle_coordinator_update's False→True flip never fires for brief dropouts.
+        This callback fires on *every* successful BLE connection handshake.
+        """
+        self._lock_manager.on_connected()
+        self.async_write_ha_state()
 
     @callback
     def _async_door_sensor_changed(self, is_open: bool) -> None:
@@ -186,11 +226,19 @@ class GimdowBLELock(GimdowBLEEntity, LockEntity):
 
     @callback
     def _handle_coordinator_update(self) -> None:
-        self._lock_manager.on_coordinator_update(self.is_locked)
-        did_change, changed_by = self._lock_manager.update_attribution(self.is_locked, self._last_is_locked)
+        is_connected = self._coordinator.connected
+        if is_connected and not self._was_connected:
+            self._lock_manager.on_connected()
+        self._was_connected = is_connected
+
+        locked = self.is_locked
+        self._lock_manager.on_coordinator_update(locked)
+        did_change, changed_by = self._lock_manager.update_attribution(
+            locked, self._last_is_locked
+        )
         if did_change:
             self._attr_changed_by = changed_by
-        self._last_is_locked = self.is_locked
+        self._last_is_locked = locked
         super()._handle_coordinator_update()
 
     # ------------------------------------------------------------------
@@ -214,8 +262,8 @@ class GimdowBLELock(GimdowBLEEntity, LockEntity):
     @property
     def is_jammed(self) -> bool | None:
         """Two distinct jam conditions:
-          A) Physical jam — locked but door sensor reports open.
-          B) Software pending — HA requested lock while door open; waiting.
+        A) Physical jam — locked but door sensor reports open.
+        B) Software pending — HA requested lock while door open; waiting.
         """
         if self.is_unlocking:
             return False
@@ -243,45 +291,11 @@ class GimdowBLELock(GimdowBLEEntity, LockEntity):
     async def async_unlock(self, **kwargs) -> None:
         await self._lock_manager.unlock()
 
-    # ------------------------------------------------------------------
-    # Diagnostic snapshot (HA-layer context)
-    # ------------------------------------------------------------------
-
-    def _diag_snapshot(self, action: str, error: str | None = None) -> GimdowBLEDiagContext:
-        def _dp_val(dp_id: int):
-            dp = self._device.datapoints[dp_id]
-            return dp.value if dp else None
-
-        return GimdowBLEDiagContext(
-            timestamp=time.time(),
-            address=self._device.address,
-            is_connected=self._coordinator.connected,
-            is_paired=self._device.is_paired,
-            is_resolving=self._device.is_resolving,
-            dp_state={
-                "dp47_lock_state": _dp_val(47),
-                "dp46_lock_cmd":    _dp_val(46),
-                "dp6_unlock_cmd":   _dp_val(6),
-                "dp36_auto_lock_delay": _dp_val(36),
-            },
-            action=action,
-            error=error,
-            extra={
-                "is_door_open":           self._lock_manager.is_door_open,
-                "pending_reason":         self._lock_manager.pending.reason.value,
-                "is_locking":             self._lock_manager.is_locking,
-                "is_unlocking":           self._lock_manager.is_unlocking,
-                "auto_lock_enabled":      self._data.virtual_auto_lock,
-                "auto_lock_timer_active": self._lock_manager._auto_lock_timer is not None,
-                "pending_action_source":  self._lock_manager.pending_action_source,
-                "is_locked":              self.is_locked,
-            },
-        )
-
 
 # ---------------------------------------------------------------------------
 # Platform setup
 # ---------------------------------------------------------------------------
+
 
 async def async_setup_entry(
     hass: HomeAssistant,
