@@ -1,7 +1,8 @@
 """The Gimdow BLE integration."""
+
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
 import logging
 from typing import Callable
@@ -14,12 +15,7 @@ from homeassistant.components.sensor import (
 )
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import (
-    CONCENTRATION_PARTS_PER_MILLION,
-    PERCENTAGE,
     SIGNAL_STRENGTH_DECIBELS_MILLIWATT,
-    UnitOfTemperature,
-    UnitOfTime,
-    UnitOfVolume,
 )
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.entity import EntityCategory
@@ -31,9 +27,16 @@ from .const import (
     BATTERY_STATE_HIGH,
     BATTERY_STATE_LOW,
     BATTERY_STATE_NORMAL,
+    BATTERY_STATE_POWEROFF,
     DOMAIN,
 )
-from .devices import GimdowBLEData, GimdowBLEEntity, GimdowBLEProductInfo
+from .devices import (
+    GimdowBLECategoryMapping,
+    GimdowBLEData,
+    GimdowBLEEntity,
+    GimdowBLEProductInfo,
+    get_platform_mapping,
+)
 from .gimdow_ble import GimdowBLEDataPointType, GimdowBLEDevice
 
 _LOGGER = logging.getLogger(__name__)
@@ -41,7 +44,9 @@ _LOGGER = logging.getLogger(__name__)
 SIGNAL_STRENGTH_DP_ID = -1
 
 
-GimdowBLESensorIsAvailable = Callable[["GimdowBLESensor", GimdowBLEProductInfo], bool] | None
+GimdowBLESensorIsAvailable = (
+    Callable[["GimdowBLESensor", GimdowBLEProductInfo], bool] | None
+)
 
 
 @dataclass
@@ -56,50 +61,7 @@ class GimdowBLESensorMapping:
     is_available: GimdowBLESensorIsAvailable = None
 
 
-@dataclass
-class GimdowBLEBatteryMapping(GimdowBLESensorMapping):
-    description: SensorEntityDescription = field(
-        default_factory=lambda: SensorEntityDescription(
-            key="battery",
-            device_class=SensorDeviceClass.BATTERY,
-            native_unit_of_measurement=PERCENTAGE,
-            entity_category=EntityCategory.DIAGNOSTIC,
-            state_class=SensorStateClass.MEASUREMENT,
-        )
-    )
-
-
-@dataclass
-class GimdowBLETemperatureMapping(GimdowBLESensorMapping):
-    description: SensorEntityDescription = field(
-        default_factory=lambda: SensorEntityDescription(
-            key="temperature",
-            device_class=SensorDeviceClass.TEMPERATURE,
-            native_unit_of_measurement=UnitOfTemperature.CELSIUS,
-            state_class=SensorStateClass.MEASUREMENT,
-        )
-    )
-
-
-def is_co2_alarm_enabled(self: GimdowBLESensor, product: GimdowBLEProductInfo) -> bool:
-    result: bool = True
-    datapoint = self._device.datapoints[13]
-    if datapoint:
-        result = bool(datapoint.value)
-    return result
-
-
-def battery_enum_getter(self: GimdowBLESensor) -> None:
-    datapoint = self._device.datapoints[104]
-    if datapoint:
-        self._attr_native_value = datapoint.value * 20.0
-
-
-@dataclass
-class GimdowBLECategorySensorMapping:
-    products: dict[str, list[GimdowBLESensorMapping]] | None = None
-    mapping: list[GimdowBLESensorMapping] | None = None
-
+GimdowBLECategorySensorMapping = GimdowBLECategoryMapping[GimdowBLESensorMapping]
 
 mapping: dict[str, GimdowBLECategorySensorMapping] = {
     "jtmspro": GimdowBLECategorySensorMapping(
@@ -116,14 +78,14 @@ mapping: dict[str, GimdowBLECategorySensorMapping] = {
                             BATTERY_STATE_HIGH,
                             BATTERY_STATE_NORMAL,
                             BATTERY_STATE_LOW,
-                            BATTERY_STATE_LOW,
+                            BATTERY_STATE_POWEROFF,
                         ],
                     ),
                     icons=[
                         "mdi:battery-check",
                         "mdi:battery-50",
                         "mdi:battery-alert",
-                        "mdi:battery-alert",
+                        "mdi:battery-off-outline",
                     ],
                 ),
             ],
@@ -151,17 +113,7 @@ rssi_mapping = GimdowBLESensorMapping(
 
 
 def get_mapping_by_device(device: GimdowBLEDevice) -> list[GimdowBLESensorMapping]:
-    category = mapping.get(device.category)
-    if category is not None and category.products is not None:
-        product_mapping = category.products.get(device.product_id)
-        if product_mapping is not None:
-            return product_mapping
-        if category.mapping is not None:
-            return category.mapping
-        else:
-            return []
-    else:
-        return []
+    return get_platform_mapping(mapping, device)
 
 
 class GimdowBLESensor(GimdowBLEEntity, SensorEntity, RestoreEntity):
@@ -169,20 +121,19 @@ class GimdowBLESensor(GimdowBLEEntity, SensorEntity, RestoreEntity):
 
     def __init__(
         self,
-        hass: HomeAssistant,
         coordinator: DataUpdateCoordinator,
         device: GimdowBLEDevice,
         product: GimdowBLEProductInfo,
         mapping: GimdowBLESensorMapping,
     ) -> None:
-        super().__init__(hass, coordinator, device, product, mapping.description)
+        super().__init__(coordinator, device, product, mapping.description)
         self._mapping = mapping
 
     async def async_added_to_hass(self) -> None:
         """Handle entity which will be added."""
         await super().async_added_to_hass()
 
-        if self._product.lock:
+        if self._product.is_lock:
             if (last_state := await self.async_get_last_state()) is not None:
                 if last_state.state != "unknown":
                     self._attr_native_value = last_state.state
@@ -237,7 +188,6 @@ async def async_setup_entry(
     mappings = get_mapping_by_device(data.device)
     entities: list[GimdowBLESensor] = [
         GimdowBLESensor(
-            hass,
             data.coordinator,
             data.device,
             data.product,
@@ -250,7 +200,6 @@ async def async_setup_entry(
         ):
             entities.append(
                 GimdowBLESensor(
-                    hass,
                     data.coordinator,
                     data.device,
                     data.product,
