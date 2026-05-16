@@ -12,7 +12,7 @@ from .manager import AbstractGimdowBLEDeviceManager, GimdowBLEDeviceCredentials
 from .lock_manager import GimdowBLELockManager, LockBlockedReason, PendingLockIntent
 from .exceptions import GimdowBLEError
 
-__version__ = "2.0.5"  # x-release-please-version
+__version__ = "3.0.0"  # x-release-please-version
 
 __all__ = [
     "AbstractGimdowBLEDeviceManager",
