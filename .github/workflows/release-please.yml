@@ -38,4 +38,4 @@ jobs:
         if: github.ref == 'refs/heads/dev' && steps.release-prerelease.outputs.pr
         env:
           GH_TOKEN: ${{ secrets.GH_TOKEN || secrets.GITHUB_TOKEN }}
-        run: gh pr merge --merge --delete-branch "${{ steps.release-prerelease.outputs.pr }}"
+        run: gh pr merge --merge --delete-branch "${{ fromJSON(steps.release-prerelease.outputs.pr).number }}"
