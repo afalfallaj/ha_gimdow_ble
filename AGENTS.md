@@ -19,6 +19,7 @@ Home Assistant custom integration for the **Gimdow A1 Pro Max BLE** smart lock.
 
 | File | Mechanism |
 |---|---|
+| `.release-please-manifest.json` → `"."` | release-please internal tracking (branch-local) |
 | `custom_components/gimdow_ble/manifest.json` → `"version"` | release-please `extra-files` JSON path |
 | `custom_components/gimdow_ble/gimdow_ble/__init__.py` → `__version__ = "x.y.z"  # x-release-please-version` | release-please `extra-files` generic marker |
 
@@ -66,7 +67,7 @@ BREAKING CHANGE: force_lock renamed to force_lock_twice.
 ### Beta (on `dev`)
 1. Push conventional commits to `dev`
 2. release-please automatically opens/updates a Release PR
-3. Merge the Release PR → `manifest.json`, `pyproject.toml`, `__init__.py` updated, tag `vX.Y.Z-beta.N` pushed, GitHub pre-release created
+3. Merge the Release PR → `manifest.json`, `__init__.py`, `.release-please-manifest.json` updated, tag `vX.Y.Z-beta.N` pushed, GitHub pre-release created, `CHANGELOG.md` updated
 
 ### Stable (on `main`)
 1. Open PR `dev → main`, merge it — resolve `.release-please-manifest.json` conflict by keeping `main`'s value
@@ -77,8 +78,8 @@ BREAKING CHANGE: force_lock renamed to force_lock_twice.
 
 | Branch | Format | Example |
 |---|---|---|
-| `dev` | semver pre-release | `2.1.0-beta.0`, `2.1.0-beta.1` |
-| `main` | semver stable | `2.1.0` |
+| `dev` | semver pre-release (`beta.0`, `beta.1`, …) | `3.0.0-beta.0`, `3.0.0-beta.1` |
+| `main` | semver stable | `3.0.0` |
 
 ---
 
@@ -100,5 +101,6 @@ These findings are confirmed by hardware test results (`test-res.txt`).
 |---|---|
 | `.github/workflows/release-please.yml` | Runs release-please on push to `main` or `dev` |
 | `.github/release-please-config.json` | Stable release config (main) |
-| `.github/release-please-config-dev.json` | Pre-release config (dev), `prerelease: true` |
+| `.github/release-please-config-dev.json` | Pre-release config (dev): `versioning: prerelease`, `prerelease-type: beta.0` |
 | `.release-please-manifest.json` | Branch-local; tracks last released version — differs between `main` and `dev` |
+| `CHANGELOG.md` | Auto-updated by release-please (`changelog-path`) — do not edit manually |
