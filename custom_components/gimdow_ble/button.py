@@ -1,4 +1,5 @@
 """The Gimdow BLE integration."""
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -17,13 +18,21 @@ from homeassistant.helpers.entity import EntityCategory
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
 
 from .const import DOMAIN
-from .devices import GimdowBLEData, GimdowBLEEntity, GimdowBLEProductInfo
+from .devices import (
+    GimdowBLECategoryMapping,
+    GimdowBLEData,
+    GimdowBLEEntity,
+    GimdowBLEProductInfo,
+    get_platform_mapping,
+)
 from .gimdow_ble import GimdowBLEDataPointType, GimdowBLEDevice
 
 _LOGGER = logging.getLogger(__name__)
 
 
-GimdowBLEButtonIsAvailable = Callable[["GimdowBLEButton", GimdowBLEProductInfo], bool] | None
+GimdowBLEButtonIsAvailable = (
+    Callable[["GimdowBLEButton", GimdowBLEProductInfo], bool] | None
+)
 
 
 @dataclass
@@ -36,11 +45,7 @@ class GimdowBLEButtonMapping:
     value: Any | None = None
 
 
-@dataclass
-class GimdowBLECategoryButtonMapping:
-    products: dict[str, list[GimdowBLEButtonMapping]] | None = None
-    mapping: list[GimdowBLEButtonMapping] | None = None
-
+GimdowBLECategoryButtonMapping = GimdowBLECategoryMapping[GimdowBLEButtonMapping]
 
 mapping: dict[str, GimdowBLECategoryButtonMapping] = {
     "jtmspro": GimdowBLECategoryButtonMapping(
@@ -81,6 +86,7 @@ mapping: dict[str, GimdowBLECategoryButtonMapping] = {
                         key="keep_retracted",
                         icon="mdi:lock-open-minus",
                         entity_category=EntityCategory.CONFIG,
+                        entity_registry_enabled_default=False,
                     ),
                     value=2,
                     dp_type=GimdowBLEDataPointType.DT_ENUM,
@@ -96,24 +102,13 @@ mapping: dict[str, GimdowBLECategoryButtonMapping] = {
                     dp_type=GimdowBLEDataPointType.DT_ENUM,
                 ),
             ],
-
         },
     ),
 }
 
 
-def get_mapping_by_device(device: GimdowBLEDevice) -> list[GimdowBLECategoryButtonMapping]:
-    category = mapping.get(device.category)
-    if category is not None and category.products is not None:
-        product_mapping = category.products.get(device.product_id)
-        if product_mapping is not None:
-            return product_mapping
-        if category.mapping is not None:
-            return category.mapping
-        else:
-            return []
-    else:
-        return []
+def get_mapping_by_device(device: GimdowBLEDevice) -> list[GimdowBLEButtonMapping]:
+    return get_platform_mapping(mapping, device)
 
 
 class GimdowBLEButton(GimdowBLEEntity, ButtonEntity):
@@ -121,13 +116,12 @@ class GimdowBLEButton(GimdowBLEEntity, ButtonEntity):
 
     def __init__(
         self,
-        hass: HomeAssistant,
         coordinator: DataUpdateCoordinator,
         device: GimdowBLEDevice,
         product: GimdowBLEProductInfo,
         mapping: GimdowBLEButtonMapping,
     ) -> None:
-        super().__init__(hass, coordinator, device, product, mapping.description)
+        super().__init__(coordinator, device, product, mapping.description)
         self._mapping = mapping
 
     async def async_press(self) -> None:
@@ -141,8 +135,8 @@ class GimdowBLEButton(GimdowBLEEntity, ButtonEntity):
         if datapoint:
             if self._mapping.value is not None:
                 await datapoint.set_value(self._mapping.value)
-            elif self._product.lock:
-                #Gimdow need true to activate lock/unlock commands
+            elif self._product.is_lock:
+                # Gimdow need true to activate lock/unlock commands
                 await datapoint.set_value(True)
             else:
                 await datapoint.set_value(not bool(datapoint.value))
@@ -171,7 +165,6 @@ async def async_setup_entry(
         ):
             entities.append(
                 GimdowBLEButton(
-                    hass,
                     data.coordinator,
                     data.device,
                     data.product,
