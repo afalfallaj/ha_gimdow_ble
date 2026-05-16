@@ -6,6 +6,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [3.0.0](https://github.com/afalfallaj/ha_gimdow_ble/compare/v2.0.5...v3.0.0) (2026-05-16)
+
+
+### ⚠ BREAKING CHANGES
+
+* overhaul integration improvements, add test suite, and migrate CI to release-please
+
+### ### Features
+
+* overhaul integration improvements, add test suite, and migrate CI to release-please ([2c9ea4f](https://github.com/afalfallaj/ha_gimdow_ble/commit/2c9ea4fc738ae0efb66be7f3a1d6ec1695840849))
+
 ## [Unreleased]
 
 > ### ⚠ Breaking Changes
