@@ -32,6 +32,7 @@ jobs:
           config-file: .github/release-please-config-dev.json
           manifest-file: .release-please-manifest.json
           token: ${{ secrets.GH_TOKEN || secrets.GITHUB_TOKEN }}
+          target-branch: dev
 
       # After a release is created, replace the auto-generated body with the
       # matching version section from our manually-maintained CHANGELOG.md.
