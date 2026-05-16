@@ -4,7 +4,9 @@ from enum import Enum
 
 GATT_MTU = 20
 
-DEFAULT_ATTEMPTS = 0xFFFF
+# Datapoint IDs used outside the protocol layer
+DP_LOCK_MOTOR_STATE = 47  # push-only DP — device sends this after every motor cycle
+DP_AUTO_LOCK_TIME = 36  # auto-lock delay in seconds (read-only from device)
 
 CHARACTERISTIC_NOTIFY = "00002b10-0000-1000-8000-00805f9b34fb"
 CHARACTERISTIC_WRITE = "00002b11-0000-1000-8000-00805f9b34fb"
@@ -14,6 +16,7 @@ SERVICE_UUID = "0000a201-0000-1000-8000-00805f9b34fb"
 MANUFACTURER_DATA_ID = 0x07D0
 
 RESPONSE_WAIT_TIMEOUT = 60
+
 
 class GimdowBLECode(Enum):
     FUN_SENDER_DEVICE_INFO = 0x0000

@@ -2,6 +2,7 @@
 
 Contains no BLE or HA dependencies; pure Python data model.
 """
+
 from __future__ import annotations
 
 import json
@@ -23,6 +24,7 @@ _LOGGER = logging.getLogger(__name__)
 # Entity / function descriptions (cloud schema)
 # ---------------------------------------------------------------------------
 
+
 class GimdowBLEEntityDescription:
     """Extra schema info merged on top of cloud device description."""
 
@@ -43,15 +45,19 @@ class GimdowBLEDeviceFunction:
 
     def __setattr__(self, name: str, value: str | dict | list | None) -> None:
         if name == "values" and isinstance(value, str):
-            parsed = json.loads(value)
-            if parsed:
-                value = parsed
+            try:
+                parsed = json.loads(value)
+                if parsed:
+                    value = parsed
+            except json.JSONDecodeError:
+                pass
         super().__setattr__(name, value)
 
 
 # ---------------------------------------------------------------------------
 # GimdowBLEDataPoint
 # ---------------------------------------------------------------------------
+
 
 class GimdowBLEDataPoint:
     """Single datapoint value container.
@@ -179,6 +185,7 @@ class GimdowBLEDataPoint:
 # GimdowBLEDataPoints (collection)
 # ---------------------------------------------------------------------------
 
+
 class GimdowBLEDataPoints:
     """Collection of all known datapoints for a device.
 
@@ -193,8 +200,6 @@ class GimdowBLEDataPoints:
     ) -> None:
         self._send_callback = send_callback
         self._datapoints: dict[int, GimdowBLEDataPoint] = {}
-        self._update_started: int = 0
-        self._updated_datapoints: list[int] = []
 
     # ------------------------------------------------------------------
     # Collection protocol
@@ -211,6 +216,10 @@ class GimdowBLEDataPoints:
             (type is None) or (self._datapoints[id].type == type)
         )
 
+    def clear(self, dp_id: int) -> None:
+        """Remove a datapoint so it returns None until the device pushes it again."""
+        self._datapoints.pop(dp_id, None)
+
     def get_or_create(
         self,
         id: int,
@@ -223,22 +232,6 @@ class GimdowBLEDataPoints:
         dp = GimdowBLEDataPoint(self, id, time.time(), 0, type, value)
         self._datapoints[id] = dp
         return dp
-
-    # ------------------------------------------------------------------
-    # Batch-update context manager
-    # ------------------------------------------------------------------
-
-    def begin_update(self) -> None:
-        """Start batching DP writes — call end_update() to flush."""
-        self._update_started += 1
-
-    async def end_update(self) -> None:
-        """Flush any pending DP writes accumulated during begin_update()."""
-        if self._update_started > 0:
-            self._update_started -= 1
-            if self._update_started == 0 and len(self._updated_datapoints) > 0:
-                await self._send_callback(self._updated_datapoints)
-                self._updated_datapoints = []
 
     # ------------------------------------------------------------------
     # Internal update paths
@@ -261,9 +254,4 @@ class GimdowBLEDataPoints:
             )
 
     async def _update_from_user(self, dp_id: int) -> None:
-        if self._update_started > 0:
-            if dp_id in self._updated_datapoints:
-                self._updated_datapoints.remove(dp_id)
-            self._updated_datapoints.append(dp_id)
-        else:
-            await self._send_callback([dp_id])
+        await self._send_callback([dp_id])
