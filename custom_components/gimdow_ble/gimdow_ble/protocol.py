@@ -62,6 +62,8 @@ class GimdowBLEProtocol:
         self._input_expected_length: int = 0
         self._input_expected_responses: dict[int, asyncio.Future] = {}
         self._last_connect_time: float = 0.0
+        self._last_good_seq_num: int = 0
+        self._last_good_code_name: str = "none"
 
         self._auth_key: bytes | None = None
         self._login_key: bytes | None = None
@@ -440,6 +442,8 @@ class GimdowBLEProtocol:
                 response_to,
                 data.hex(),
             )
+            self._last_good_seq_num = seq_num
+            self._last_good_code_name = f"unknown(0x{_code:04x})"
             return
 
         if response_to != 0:
@@ -453,6 +457,8 @@ class GimdowBLEProtocol:
         else:
             _LOGGER.debug("%s: Received #%s %s", self.address, seq_num, code.name)
 
+        self._last_good_seq_num = seq_num
+        self._last_good_code_name = code.name
         self._handle_command_or_response(seq_num, response_to, code, data)
 
     def _notification_handler(self, _sender: int, data: bytearray) -> None:
@@ -471,11 +477,13 @@ class GimdowBLEProtocol:
                 self._clean_input()
             else:
                 _LOGGER.warning(
-                    "%s: Unexpected packet #%s (expected %s) — %.1fs since last connect",
+                    "%s: Unexpected packet #%s (expected %s) — %.1fs since last connect, last msg: #%s %s",
                     self.address,
                     packet_num,
                     self._input_expected_packet_num,
                     time.monotonic() - self._last_connect_time,
+                    self._last_good_seq_num,
+                    self._last_good_code_name,
                 )
                 self._clean_input()
                 return
@@ -489,11 +497,13 @@ class GimdowBLEProtocol:
             self._input_expected_packet_num += 1
         else:
             _LOGGER.warning(
-                "%s: Missing packet #%s (received %s) — %.1fs since last connect",
+                "%s: Missing packet #%s (received %s) — %.1fs since last connect, last msg: #%s %s",
                 self.address,
                 self._input_expected_packet_num,
                 packet_num,
                 time.monotonic() - self._last_connect_time,
+                self._last_good_seq_num,
+                self._last_good_code_name,
             )
             self._clean_input()
             return
