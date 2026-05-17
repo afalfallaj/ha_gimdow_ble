@@ -6,6 +6,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [3.0.0-beta.6](https://github.com/afalfallaj/ha_gimdow_ble/compare/v3.0.0-beta.5...v3.0.0-beta.6) (2026-05-17)
+
+
+### ### Bug Fixes
+
+* schedule update on packet loss ([a493674](https://github.com/afalfallaj/ha_gimdow_ble/commit/a49367447549fdb3269e624454a9538899a7d578))
+* update release manifest files for versioning consistency ([e47410c](https://github.com/afalfallaj/ha_gimdow_ble/commit/e47410c7e4e41e97473edfe3d601ba61530e8c5f))
+
 ## [3.0.0-beta.5](https://github.com/afalfallaj/ha_gimdow_ble/compare/v3.0.0-beta.4...v3.0.0-beta.5) (2026-05-17)
 
 
