@@ -1,4 +1,5 @@
 """The Gimdow BLE integration."""
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -12,13 +13,7 @@ from homeassistant.components.number import (
 )
 from homeassistant.components.number.const import NumberDeviceClass, NumberMode
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.const import (
-    CONCENTRATION_PARTS_PER_MILLION,
-    PERCENTAGE,
-    UnitOfTemperature,
-    UnitOfTime,
-    UnitOfVolume,
-)
+from homeassistant.const import UnitOfTime
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.entity import EntityCategory
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
@@ -27,7 +22,13 @@ from homeassistant.helpers.dispatcher import async_dispatcher_send
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
 
 from .const import DOMAIN
-from .devices import GimdowBLEData, GimdowBLEEntity, GimdowBLEProductInfo
+from .devices import (
+    GimdowBLECategoryMapping,
+    GimdowBLEData,
+    GimdowBLEEntity,
+    GimdowBLEProductInfo,
+    get_platform_mapping,
+)
 from .gimdow_ble import GimdowBLEDataPointType, GimdowBLEDevice
 
 _LOGGER = logging.getLogger(__name__)
@@ -58,16 +59,10 @@ class GimdowBLENumberMapping:
     getter: GimdowBLENumberGetter = None
     setter: GimdowBLENumberSetter = None
     mode: NumberMode = NumberMode.BOX
+    send_time_signal: bool = False
 
 
-
-
-
-@dataclass
-class GimdowBLECategoryNumberMapping:
-    products: dict[str, list[GimdowBLENumberMapping]] | None = None
-    mapping: list[GimdowBLENumberMapping] | None = None
-
+GimdowBLECategoryNumberMapping = GimdowBLECategoryMapping[GimdowBLENumberMapping]
 
 mapping: dict[str, GimdowBLECategoryNumberMapping] = {
     "jtmspro": GimdowBLECategoryNumberMapping(
@@ -84,6 +79,7 @@ mapping: dict[str, GimdowBLECategoryNumberMapping] = {
                         native_step=1,
                         entity_category=EntityCategory.CONFIG,
                     ),
+                    send_time_signal=True,
                 ),
             ],
         },
@@ -91,18 +87,8 @@ mapping: dict[str, GimdowBLECategoryNumberMapping] = {
 }
 
 
-def get_mapping_by_device(device: GimdowBLEDevice) -> list[GimdowBLECategoryNumberMapping]:
-    category = mapping.get(device.category)
-    if category is not None and category.products is not None:
-        product_mapping = category.products.get(device.product_id)
-        if product_mapping is not None:
-            return product_mapping
-        if category.mapping is not None:
-            return category.mapping
-        else:
-            return []
-    else:
-        return []
+def get_mapping_by_device(device: GimdowBLEDevice) -> list[GimdowBLENumberMapping]:
+    return get_platform_mapping(mapping, device)
 
 
 class GimdowBLENumber(GimdowBLEEntity, NumberEntity, RestoreEntity):
@@ -110,14 +96,13 @@ class GimdowBLENumber(GimdowBLEEntity, NumberEntity, RestoreEntity):
 
     def __init__(
         self,
-        hass: HomeAssistant,
         coordinator: DataUpdateCoordinator,
         device: GimdowBLEDevice,
         product: GimdowBLEProductInfo,
         mapping: GimdowBLENumberMapping,
         data: GimdowBLEData,
     ) -> None:
-        super().__init__(hass, coordinator, device, product, mapping.description)
+        super().__init__(coordinator, device, product, mapping.description)
         self._mapping = mapping
         self._data = data
         self._attr_mode = mapping.mode
@@ -126,7 +111,7 @@ class GimdowBLENumber(GimdowBLEEntity, NumberEntity, RestoreEntity):
         """Handle entity which will be added."""
         await super().async_added_to_hass()
 
-        if self._product.lock:
+        if self._product.is_lock:
             if (last_state := await self.async_get_last_state()) is not None:
                 if last_state.state != "unknown":
                     try:
@@ -134,7 +119,7 @@ class GimdowBLENumber(GimdowBLEEntity, NumberEntity, RestoreEntity):
                         # Calculate raw value based on coefficient to store in device cache
                         # The property logic divides by coefficient, so we multiply here.
                         raw_value = int(value * self._mapping.coefficient)
-                        
+
                         self._device.datapoints.get_or_create(
                             self._mapping.dp_id,
                             GimdowBLEDataPointType.DT_VALUE,
@@ -153,7 +138,7 @@ class GimdowBLENumber(GimdowBLEEntity, NumberEntity, RestoreEntity):
         if datapoint:
             return datapoint.value / self._mapping.coefficient
 
-        return self._mapping.description.native_min_value
+        return None
 
     async def async_set_native_value(self, value: float) -> None:
         """Set new value."""
@@ -164,13 +149,12 @@ class GimdowBLENumber(GimdowBLEEntity, NumberEntity, RestoreEntity):
         datapoint = self._device.datapoints.get_or_create(
             self._mapping.dp_id,
             GimdowBLEDataPointType.DT_VALUE,
-            int(int_value),
+            int_value,
         )
         if datapoint:
             await datapoint.set_value(int_value)
 
-        # If this is the auto-lock time (DP 36), notify the lock entity
-        if self._mapping.dp_id == 36:
+        if self._mapping.send_time_signal:
             async_dispatcher_send(self.hass, self._data.virtual_auto_lock_time_signal)
 
     @property
@@ -197,7 +181,6 @@ async def async_setup_entry(
         ):
             entities.append(
                 GimdowBLENumber(
-                    hass,
                     data.coordinator,
                     data.device,
                     data.product,

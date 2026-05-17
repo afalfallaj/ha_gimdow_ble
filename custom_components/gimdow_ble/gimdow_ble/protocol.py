@@ -16,6 +16,7 @@
   - ``self._flags``, ``self._is_bound`` (int / bool)
   - ``self._local_key`` (bytes)
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -26,7 +27,7 @@ import time
 from struct import pack, unpack
 from typing import Any
 
-from Crypto.Cipher import AES
+from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
 
 from .const import (
     CHARACTERISTIC_NOTIFY,
@@ -42,6 +43,7 @@ from .exceptions import (
     GimdowBLEDataFormatError,
     GimdowBLEDataLengthError,
     GimdowBLEDeviceError,
+    GimdowBLEUnsupportedProtocolError,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -59,6 +61,9 @@ class GimdowBLEProtocol:
         self._input_expected_packet_num: int = 0
         self._input_expected_length: int = 0
         self._input_expected_responses: dict[int, asyncio.Future] = {}
+        self._last_connect_time: float = 0.0
+        self._last_good_seq_num: int = 0
+        self._last_good_code_name: str = "none"
 
         self._auth_key: bytes | None = None
         self._login_key: bytes | None = None
@@ -66,6 +71,11 @@ class GimdowBLEProtocol:
 
         self._seq_num_lock = asyncio.Lock()
         self._current_seq_num: int = 1
+
+    async def _reset_seq_num(self) -> None:
+        """Reset the protocol sequence counter to 1 under the seq_num_lock."""
+        async with self._seq_num_lock:
+            self._current_seq_num = 1
 
     # ------------------------------------------------------------------
     # CRC / integer helpers (static)
@@ -140,8 +150,8 @@ class GimdowBLEProtocol:
         while len(raw) % 16 != 0:
             raw += b"\x00"
 
-        cipher = AES.new(key, AES.MODE_CBC, iv)
-        encrypted = security_flag + iv + cipher.encrypt(raw)
+        encryptor = Cipher(algorithms.AES(key), modes.CBC(iv)).encryptor()
+        encrypted = security_flag + iv + encryptor.update(bytes(raw)) + encryptor.finalize()
 
         command = []
         packet_num = 0
@@ -153,7 +163,7 @@ class GimdowBLEProtocol:
             if packet_num == 0:
                 packet += self._pack_int(length)
                 packet += pack(">B", self._protocol_version << 4)
-            data_part = encrypted[pos:pos + GATT_MTU - len(packet)]
+            data_part = encrypted[pos : pos + GATT_MTU - len(packet)]
             packet += data_part
             command.append(packet)
             pos += len(data_part)
@@ -217,7 +227,7 @@ class GimdowBLEProtocol:
     ) -> None:
         datapoints: list[GimdowBLEDataPoint] = []
         pos = start_pos
-        while len(data) - pos >= 4:
+        while len(data) - pos >= 3:
             id: int = data[pos]
             pos += 1
             _type: int = data[pos]
@@ -232,11 +242,11 @@ class GimdowBLEProtocol:
                 raise GimdowBLEDataLengthError()
             raw_value = data[pos:next_pos]
             match dp_type:
-                case (GimdowBLEDataPointType.DT_RAW | GimdowBLEDataPointType.DT_BITMAP):
+                case GimdowBLEDataPointType.DT_RAW | GimdowBLEDataPointType.DT_BITMAP:
                     value = raw_value
                 case GimdowBLEDataPointType.DT_BOOL:
                     value = int.from_bytes(raw_value, "big") != 0
-                case (GimdowBLEDataPointType.DT_VALUE | GimdowBLEDataPointType.DT_ENUM):
+                case GimdowBLEDataPointType.DT_VALUE | GimdowBLEDataPointType.DT_ENUM:
                     value = int.from_bytes(raw_value, "big", signed=True)
                 case GimdowBLEDataPointType.DT_STRING:
                     value = raw_value.decode()
@@ -245,7 +255,10 @@ class GimdowBLEProtocol:
 
             _LOGGER.debug(
                 "%s: DP update — id:%s type:%s value:%s",
-                self.address, id, dp_type.name, value,
+                self.address,
+                id,
+                dp_type.name,
+                value,
             )
             self._datapoints._update_from_device(id, timestamp, flags, dp_type, value)
             datapoints.append(self._datapoints[id])
@@ -263,7 +276,9 @@ class GimdowBLEProtocol:
         result: int = 0
         _LOGGER.debug(
             "%s: Handling command/response code=%s data_len=%s",
-            self.address, code.name, len(data),
+            self.address,
+            code.name,
+            len(data),
         )
 
         match code:
@@ -279,7 +294,23 @@ class GimdowBLEProtocol:
                 srand = data[6:12]
                 self._session_key = hashlib.md5(self._local_key + srand).digest()
                 self._auth_key = data[14:46]
-                _LOGGER.info("%s: Device Info received. Session Key derived.", self.address)
+                _LOGGER.info(
+                    "%s: Device Info received. Session Key derived.", self.address
+                )
+                if self._protocol_version not in (2, 3):
+                    _LOGGER.error(
+                        "%s: Unsupported protocol version %s negotiated. "
+                        "All write operations (lock, unlock, settings) will fail. "
+                        "Please open an issue at https://github.com/afalfallaj/ha_gimdow_ble "
+                        "with this log line.",
+                        self.address,
+                        self._protocol_version,
+                    )
+                    # Mark unpaired so _ensure_connected raises on the next command
+                    # instead of silently failing. A lock that appears functional but
+                    # cannot lock is the worst failure mode for a security device.
+                    self._is_paired = False
+                    return
 
             case GimdowBLECode.FUN_SENDER_PAIR:
                 if len(data) != 1:
@@ -289,7 +320,12 @@ class GimdowBLEProtocol:
                     _LOGGER.debug("%s: Device is already paired", self.address)
                     result = 0
                 self._is_paired = result == 0
-                _LOGGER.info("%s: Pairing result: %s (paired=%s)", self.address, result, self._is_paired)
+                _LOGGER.info(
+                    "%s: Pairing result: %s (paired=%s)",
+                    self.address,
+                    result,
+                    self._is_paired,
+                )
 
             case GimdowBLECode.FUN_SENDER_DEVICE_STATUS:
                 if len(data) != 1:
@@ -311,9 +347,14 @@ class GimdowBLEProtocol:
                 timezone = -int(time.timezone / 36)
                 resp_data = pack(
                     ">BBBBBBBh",
-                    time_str.tm_year % 100, time_str.tm_mon, time_str.tm_mday,
-                    time_str.tm_hour, time_str.tm_min, time_str.tm_sec,
-                    time_str.tm_wday, timezone,
+                    time_str.tm_year % 100,
+                    time_str.tm_mon,
+                    time_str.tm_mday,
+                    time_str.tm_hour,
+                    time_str.tm_min,
+                    time_str.tm_sec,
+                    time_str.tm_wday,
+                    timezone,
                 )
                 self._create_safe_task(self._send_response(code, resp_data, seq_num))
 
@@ -324,7 +365,7 @@ class GimdowBLEProtocol:
             case GimdowBLECode.FUN_RECEIVE_SIGN_DP:
                 dp_seq_num = int.from_bytes(data[:2], "big")
                 flags = data[2]
-                self._parse_datapoints_v3(time.time(), flags, data, 2)
+                self._parse_datapoints_v3(time.time(), flags, data, 3)
                 resp_data = pack(">HBB", dp_seq_num, flags, 0)
                 self._create_safe_task(self._send_response(code, resp_data, seq_num))
 
@@ -337,9 +378,16 @@ class GimdowBLEProtocol:
                 dp_seq_num = int.from_bytes(data[:2], "big")
                 flags = data[2]
                 timestamp, pos = self._parse_timestamp(data, 3)
-                self._parse_datapoints_v3(time.time(), flags, data, pos)
+                self._parse_datapoints_v3(timestamp, flags, data, pos)
                 resp_data = pack(">HBB", dp_seq_num, flags, 0)
                 self._create_safe_task(self._send_response(code, resp_data, seq_num))
+
+            case GimdowBLECode.FUN_RECEIVE_DP_V4 | GimdowBLECode.FUN_RECEIVE_TIME_DP_V4:
+                _LOGGER.warning(
+                    "%s: Received protocol v4 DP push (code=0x%04x) — v4 not implemented; push dropped",
+                    self.address,
+                    code.value,
+                )
 
         if response_to != 0:
             future = self._input_expected_responses.pop(response_to, None)
@@ -368,8 +416,8 @@ class GimdowBLEProtocol:
         encrypted = self._input_buffer[17:]
         self._clean_input()
 
-        cipher = AES.new(key, AES.MODE_CBC, iv)
-        raw = cipher.decrypt(encrypted)
+        decryptor = Cipher(algorithms.AES(key), modes.CBC(bytes(iv))).decryptor()
+        raw = decryptor.update(bytes(encrypted)) + decryptor.finalize()
 
         seq_num, response_to, _code, length = unpack(">IIHH", raw[:12])
         data_end_pos = length + 12
@@ -378,7 +426,7 @@ class GimdowBLEProtocol:
             raise GimdowBLEDataLengthError()
         if raw_length > data_end_pos:
             calc_crc = self._calc_crc16(raw[:data_end_pos])
-            (data_crc,) = unpack(">H", raw[data_end_pos:data_end_pos + 2])
+            (data_crc,) = unpack(">H", raw[data_end_pos : data_end_pos + 2])
             if calc_crc != data_crc:
                 raise GimdowBLEDataCRCError()
         data = raw[12:data_end_pos]
@@ -388,15 +436,29 @@ class GimdowBLEProtocol:
         except ValueError:
             _LOGGER.debug(
                 "%s: Unknown message: #%s 0x%x → #%s  data=%s",
-                self.address, seq_num, _code, response_to, data.hex(),
+                self.address,
+                seq_num,
+                _code,
+                response_to,
+                data.hex(),
             )
+            self._last_good_seq_num = seq_num
+            self._last_good_code_name = f"unknown(0x{_code:04x})"
             return
 
         if response_to != 0:
-            _LOGGER.debug("%s: Received #%s %s → #%s", self.address, seq_num, code.name, response_to)
+            _LOGGER.debug(
+                "%s: Received #%s %s → #%s",
+                self.address,
+                seq_num,
+                code.name,
+                response_to,
+            )
         else:
             _LOGGER.debug("%s: Received #%s %s", self.address, seq_num, code.name)
 
+        self._last_good_seq_num = seq_num
+        self._last_good_code_name = code.name
         self._handle_command_or_response(seq_num, response_to, code, data)
 
     def _notification_handler(self, _sender: int, data: bytearray) -> None:
@@ -409,15 +471,22 @@ class GimdowBLEProtocol:
             if packet_num == 0:
                 _LOGGER.debug(
                     "%s: Packet 0 while expecting %s — resetting buffer",
-                    self.address, self._input_expected_packet_num,
+                    self.address,
+                    self._input_expected_packet_num,
                 )
                 self._clean_input()
             else:
-                _LOGGER.error(
-                    "%s: Unexpected packet #%s (expected %s)",
-                    self.address, packet_num, self._input_expected_packet_num,
+                _LOGGER.warning(
+                    "%s: Unexpected packet #%s (expected %s) — %.1fs since last connect, last msg: #%s %s",
+                    self.address,
+                    packet_num,
+                    self._input_expected_packet_num,
+                    time.monotonic() - self._last_connect_time,
+                    self._last_good_seq_num,
+                    self._last_good_code_name,
                 )
                 self._clean_input()
+                return
 
         if packet_num == self._input_expected_packet_num:
             if packet_num == 0:
@@ -427,9 +496,14 @@ class GimdowBLEProtocol:
             self._input_buffer += data[pos:]
             self._input_expected_packet_num += 1
         else:
-            _LOGGER.error(
-                "%s: Missing packet #%s (received %s)",
-                self.address, self._input_expected_packet_num, packet_num,
+            _LOGGER.warning(
+                "%s: Missing packet #%s (received %s) — %.1fs since last connect, last msg: #%s %s",
+                self.address,
+                self._input_expected_packet_num,
+                packet_num,
+                time.monotonic() - self._last_connect_time,
+                self._last_good_seq_num,
+                self._last_good_code_name,
             )
             self._clean_input()
             return
@@ -437,7 +511,9 @@ class GimdowBLEProtocol:
         if len(self._input_buffer) > self._input_expected_length:
             _LOGGER.error(
                 "%s: Buffer overflow: got %s, expected %s",
-                self.address, len(self._input_buffer), self._input_expected_length,
+                self.address,
+                len(self._input_buffer),
+                self._input_expected_length,
             )
             self._clean_input()
         elif len(self._input_buffer) == self._input_expected_length:
@@ -446,7 +522,8 @@ class GimdowBLEProtocol:
             except Exception:
                 _LOGGER.error(
                     "%s: Error parsing BLE notification — discarding buffer",
-                    self.address, exc_info=True,
+                    self.address,
+                    exc_info=True,
                 )
                 self._clean_input()
 
@@ -461,7 +538,10 @@ class GimdowBLEProtocol:
             value = dp._get_value()
             _LOGGER.debug(
                 "%s: Sending DP update — id:%s type:%s value:%s",
-                self.address, dp.id, dp.type.name, dp.value,
+                self.address,
+                dp.id,
+                dp.type.name,
+                dp.value,
             )
             data += pack(">BBB", dp.id, int(dp.type.value), len(value))
             data += value
@@ -471,4 +551,9 @@ class GimdowBLEProtocol:
         if self._protocol_version in (2, 3):
             await self._send_datapoints_v3(datapoint_ids)
         else:
-            raise GimdowBLEDeviceError(0)
+            _LOGGER.error(
+                "%s: Cannot send datapoints — protocol version %s is not supported.",
+                self.address,
+                self._protocol_version,
+            )
+            raise GimdowBLEUnsupportedProtocolError(self._protocol_version)

@@ -12,14 +12,22 @@
   ],
   "config_flow": true,
   "dependencies": [
-    "bluetooth_adapters",
+    "bluetooth",
+    "bluetooth_adapters"
+  ],
+  "after_dependencies": [
     "tuya"
   ],
   "documentation": "https://github.com/afalfallaj/ha_gimdow_ble",
+  "issue_tracker": "https://github.com/afalfallaj/ha_gimdow_ble/issues",
   "requirements": [
-    "tuya-iot-py-sdk==0.6.6",
-    "pycountry>=22.3.5"
+    "tuya-iot-py-sdk>=0.6.6,<0.7"
   ],
+  "integration_type": "device",
   "iot_class": "local_push",
-  "version": "2.0.5"
+  "loggers": [
+    "custom_components.gimdow_ble"
+  ],
+  "quality_scale": "custom",
+  "version": "3.0.0-beta.5"
 }

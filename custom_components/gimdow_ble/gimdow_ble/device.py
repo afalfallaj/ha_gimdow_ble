@@ -5,6 +5,7 @@
 credentials, advertisement decoding, function/status mappings, and the
 diagnostic snapshot helper.
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -15,7 +16,6 @@ from typing import Any
 
 from bleak.backends.device import BLEDevice
 from bleak.backends.scanner import AdvertisementData
-from Crypto.Cipher import AES
 
 from .connection import GimdowBLEConnection
 from .const import (
@@ -29,13 +29,7 @@ from .datapoints import (
     GimdowBLEDeviceFunction,
     GimdowBLEEntityDescription,
 )
-from .diagnostics import GimdowBLEDiagContext
-from .exceptions import (
-    GimdowBLEEchoTimeoutError,
-    GimdowBLEResolutionAbortedError,
-    GimdowBLEStateTimeoutError,
-)
-from .manager import AbstaractGimdowBLEDeviceManager, GimdowBLEDeviceCredentials
+from .manager import AbstractGimdowBLEDeviceManager, GimdowBLEDeviceCredentials
 from .protocol import GimdowBLEProtocol
 
 _LOGGER = logging.getLogger(__name__)
@@ -46,18 +40,18 @@ class GimdowBLEDevice(GimdowBLEConnection, GimdowBLEProtocol):
 
     def __init__(
         self,
-        device_manager: AbstaractGimdowBLEDeviceManager,
+        device_manager: AbstractGimdowBLEDeviceManager,
         ble_device: BLEDevice,
         advertisement_data: AdvertisementData | None = None,
     ) -> None:
-        # --- Mixin initialisers ---
-        self._init_connection()
-        self._init_protocol()
-
-        # --- Device identity ---
+        # --- Device identity (must be set before _init_connection checks address) ---
         self._device_manager = device_manager
         self._ble_device = ble_device
         self._advertisement_data = advertisement_data
+
+        # --- Mixin initialisers ---
+        self._init_connection()
+        self._init_protocol()
         self._device_info: GimdowBLEDeviceCredentials | None = None
 
         # --- Protocol keys (set by _update_device_info / _handle_command_or_response) ---
@@ -77,9 +71,6 @@ class GimdowBLEDevice(GimdowBLEConnection, GimdowBLEProtocol):
         # --- Cloud schema ---
         self._function: dict = {}
         self._status_range: dict = {}
-
-        # --- Lock resolution flag (used by get_lock_state) ---
-        self._is_resolving: bool = False
 
     # ------------------------------------------------------------------
     # Identity & advertisement
@@ -101,18 +92,33 @@ class GimdowBLEDevice(GimdowBLEConnection, GimdowBLEProtocol):
         result += self._device_info.uuid.encode()
         result += self._local_key
         result += self._device_info.device_id.encode()
-        for _ in range(44 - len(result)):
-            result += b"\x00"
-        return result
+        if len(result) > 44:
+            _LOGGER.error(
+                "%s: Pairing request payload too long (%d bytes > 44) — truncating",
+                self.address,
+                len(result),
+            )
+            result = result[:44]
+        else:
+            result += b"\x00" * (44 - len(result))
+        return bytes(result)
 
     async def pair(self) -> None:
         from .const import GimdowBLECode
-        await self._send_packet(GimdowBLECode.FUN_SENDER_PAIR, self._build_pairing_request())
+
+        await self._send_packet(
+            GimdowBLECode.FUN_SENDER_PAIR, self._build_pairing_request()
+        )
 
     async def update(self) -> None:
         from .const import GimdowBLECode
+
         _LOGGER.debug("%s: Requesting status update", self.address)
         await self._send_packet(GimdowBLECode.FUN_SENDER_DEVICE_STATUS, bytes())
+
+    def schedule_update(self, *, name: str = "scheduled-update") -> None:
+        """Schedule a non-blocking status update via the event loop."""
+        self._create_safe_task(self.update(), name=name)
 
     async def _update_device_info(self) -> bool:
         if self._device_info is None:
@@ -138,10 +144,14 @@ class GimdowBLEDevice(GimdowBLEConnection, GimdowBLEProtocol):
                 if code := f.get("code"):
                     self._status_range[code] = GimdowBLEDeviceFunction(**f)
 
-    def update_description(self, description: GimdowBLEEntityDescription | None) -> None:
+    def update_description(
+        self, description: GimdowBLEEntityDescription | None
+    ) -> None:
         if not description:
             return
-        self.append_functions(description.function or [], description.status_range or [])
+        self.append_functions(
+            description.function or [], description.status_range or []
+        )
         if description.values_overrides:
             for key, values in description.values_overrides.items():
                 if f := self._function.get(key):
@@ -164,16 +174,12 @@ class GimdowBLEDevice(GimdowBLEConnection, GimdowBLEProtocol):
             if service_data and len(service_data) > 1 and service_data[0] == 0:
                 raw_product_id = service_data[1:]
         if self._advertisement_data.manufacturer_data:
-            manufacturer_data = self._advertisement_data.manufacturer_data.get(MANUFACTURER_DATA_ID)
+            manufacturer_data = self._advertisement_data.manufacturer_data.get(
+                MANUFACTURER_DATA_ID
+            )
             if manufacturer_data and len(manufacturer_data) > 6:
                 self._is_bound = (manufacturer_data[0] & 0x80) != 0
                 self._protocol_version = manufacturer_data[1]
-                raw_uuid = manufacturer_data[6:]
-                if raw_product_id:
-                    key = hashlib.md5(raw_product_id).digest()
-                    cipher = AES.new(key, AES.MODE_CBC, key)
-                    raw_uuid = cipher.decrypt(raw_uuid)
-                    self._uuid = raw_uuid.decode("utf-8")
 
     # ------------------------------------------------------------------
     # Properties
@@ -252,16 +258,11 @@ class GimdowBLEDevice(GimdowBLEConnection, GimdowBLEProtocol):
         return self._is_paired
 
     @property
-    def is_resolving(self) -> bool:
-        return self._is_resolving
-
-    @property
     def status(self) -> dict[str, Any]:
         result = {}
-        dps = self._datapoints._datapoints
         for functions in (self._status_range, self._function):
             for dpcode, f in functions.items():
-                v = dps.get(f.dp_id)
+                v = self._datapoints[f.dp_id]
                 if v:
                     result[dpcode] = v.value
         return result
@@ -275,166 +276,56 @@ class GimdowBLEDevice(GimdowBLEConnection, GimdowBLEProtocol):
     ) -> GimdowBLEDataPoint:
         return self._datapoints.get_or_create(id, type, value)
 
-    async def send_control_datapoint(self, dp_id: int, value: Any) -> GimdowBLEDataPoint:
+    async def send_control_datapoint(
+        self, dp_id: int, value: Any
+    ) -> GimdowBLEDataPoint:
         """Send a control datapoint (e.g. lock/unlock command)."""
-        datapoint = self.get_or_create_datapoint(dp_id, GimdowBLEDataPointType.DT_BOOL, value)
+        datapoint = self.get_or_create_datapoint(
+            dp_id, GimdowBLEDataPointType.DT_BOOL, value
+        )
         await datapoint.set_value(value)
         return datapoint
 
-    def get_lock_state(self, state_dp_id: int) -> bool | None:
-        """Return True=Locked, False=Unlocked, None=Unknown."""
-        if self._is_resolving:
-            return None
-        dp = self._datapoints[state_dp_id]
-        if dp:
-            return not bool(dp.value)  # DP True = Unlocked → is_locked = False
-        return None
-
-    # ------------------------------------------------------------------
-    # Lock resolution (lives on device — requires BLE access)
-    # ------------------------------------------------------------------
-
-    async def _send_control_datapoint_wait_for_echo(
-        self, dp_id: int, value: Any, timeout: float = 10.0
+    async def send_command_wait_state_echo(
+        self,
+        cmd_dp_id: int,
+        value: Any,
+        state_dp_id: int,
+        timeout: float = 25.0,
     ) -> bool:
-        """Send a control DP and block until the device echoes it back."""
-        future_echo = asyncio.get_running_loop().create_future()
+        """Send a control DP and wait for any notification on state_dp_id.
 
-        def _echo_cb(datapoints: list[GimdowBLEDataPoint]) -> None:
+        Returns True if state_dp_id pushed back within timeout, False on timeout.
+        Timeout is not failure — the device may already be in the target state.
+        """
+        future = asyncio.get_running_loop().create_future()
+
+        def _cb(datapoints: list[GimdowBLEDataPoint]) -> None:
             for dp in datapoints:
-                if dp.id == dp_id and not future_echo.done():
-                    future_echo.set_result(True)
+                if dp.id == state_dp_id and not future.done():
+                    future.set_result(True)
 
-        remove_cb = self.register_callback(_echo_cb)
+        remove_cb = self.register_callback(_cb)
         try:
-            await self.send_control_datapoint(dp_id, value)
-            await asyncio.wait_for(future_echo, timeout=timeout)
-            _LOGGER.debug("%s: DP %s echoed.", self.address, dp_id)
+            await self.send_control_datapoint(cmd_dp_id, value)
+            await asyncio.wait_for(future, timeout=timeout)
             return True
         except asyncio.TimeoutError:
-            err = GimdowBLEEchoTimeoutError(dp_id=dp_id, timeout=timeout)
-            ctx = self._diag_context("_send_control_datapoint_wait_for_echo", error=str(err), dp_id=dp_id)
-            ctx.log(_LOGGER, logging.WARNING)
-            await self._execute_disconnect()
+            _LOGGER.debug(
+                "%s: send_command_wait_state_echo — no DP%s echo in %ss.",
+                self.address,
+                state_dp_id,
+                timeout,
+            )
             return False
-        except Exception as e:
-            ctx = self._diag_context("_send_control_datapoint_wait_for_echo", error=str(e), dp_id=dp_id)
-            ctx.log(_LOGGER)
+        except Exception:
             return False
         finally:
             remove_cb()
 
-    async def resolve_unknown_state(
-        self,
-        unlock_dp_id: int,
-        unlock_value: Any,
-        state_dp_id: int,
-        lock_dp_id: int | None = None,
-        lock_value: Any | None = None,
-        target_lock: bool = False,
-    ) -> None:
-        """5-phase brute-force lock state resolution cycle."""
-        if self._is_resolving:
-            _LOGGER.debug("%s: resolve_unknown_state already running. Ignoring.", self.address)
-            return
-
-        self._is_resolving = True
-        target_label = "LOCK" if target_lock else "UNLOCK"
-        _LOGGER.warning("%s: resolve_unknown_state started. target=%s", self.address, target_label)
-
-        try:
-            # Phase 1 — first unlock + echo
-            _LOGGER.debug("%s: [Ph1] Sending first unlock (DP %s).", self.address, unlock_dp_id)
-            if not await self._send_control_datapoint_wait_for_echo(unlock_dp_id, unlock_value):
-                err = GimdowBLEResolutionAbortedError("No echo for Phase 1 unlock")
-                ctx = self._diag_context("resolve/phase1", error=str(err), target=target_label)
-                ctx.log(_LOGGER, logging.WARNING)
-                return
-
-            # Phase 2 — wait for Unlocked state
-            _LOGGER.debug("%s: [Ph2] Waiting for DP %s Unlocked.", self.address, state_dp_id)
-            future_unlock = asyncio.get_running_loop().create_future()
-
-            def _state_cb(dps: list[GimdowBLEDataPoint]) -> None:
-                for dp in dps:
-                    if dp.id == state_dp_id and bool(dp.value) and not future_unlock.done():
-                        future_unlock.set_result(True)
-
-            remove_state_cb = self.register_callback(_state_cb)
-            try:
-                current = self._datapoints[state_dp_id]
-                if current and bool(current.value):
-                    future_unlock.set_result(True)
-                await asyncio.wait_for(future_unlock, timeout=60)
-                _LOGGER.debug("%s: [Ph2] Unlocked confirmed.", self.address)
-            except asyncio.TimeoutError:
-                err = GimdowBLEStateTimeoutError("Unlocked", 60)
-                ctx = self._diag_context("resolve/phase2", error=str(err), target=target_label)
-                ctx.log(_LOGGER, logging.WARNING)
-            except Exception as e:
-                ctx = self._diag_context("resolve/phase2", error=str(e), target=target_label)
-                ctx.log(_LOGGER)
-            finally:
-                remove_state_cb()
-
-            # Phase 3 — second unlock + echo (mechanical confirmation)
-            _LOGGER.debug("%s: [Ph3] Second unlock.", self.address)
-            if not await self._send_control_datapoint_wait_for_echo(unlock_dp_id, unlock_value):
-                _LOGGER.warning("%s: [Ph3] No echo for second unlock — proceeding.", self.address)
-
-            # Phase 4 — mechanical settle
-            _LOGGER.debug("%s: [Ph4] Waiting 10s for mechanical settle.", self.address)
-            await asyncio.sleep(10)
-
-            # Phase 5 — lock if requested
-            if target_lock and lock_dp_id is not None:
-                _LOGGER.debug("%s: [Ph5] Sending lock (DP %s).", self.address, lock_dp_id)
-                future_lock = asyncio.get_running_loop().create_future()
-
-                def _lock_cb(dps: list[GimdowBLEDataPoint]) -> None:
-                    for dp in dps:
-                        if dp.id == state_dp_id and not bool(dp.value) and not future_lock.done():
-                            future_lock.set_result(True)
-
-                remove_lock_cb = self.register_callback(_lock_cb)
-                try:
-                    await self.send_control_datapoint(lock_dp_id, lock_value)
-                    await asyncio.wait_for(future_lock, timeout=75)
-                    _LOGGER.debug("%s: [Ph5] Locked confirmed.", self.address)
-                except asyncio.TimeoutError:
-                    err = GimdowBLEStateTimeoutError("Locked", 75)
-                    ctx = self._diag_context("resolve/phase5", error=str(err), target=target_label)
-                    ctx.log(_LOGGER, logging.WARNING)
-                except Exception as e:
-                    ctx = self._diag_context("resolve/phase5", error=str(e), target=target_label)
-                    ctx.log(_LOGGER)
-                finally:
-                    remove_lock_cb()
-        finally:
-            self._is_resolving = False
-            _LOGGER.debug("%s: resolve_unknown_state done. target=%s", self.address, target_label)
-
-    # ------------------------------------------------------------------
-    # Diagnostics
-    # ------------------------------------------------------------------
-
-    def _diag_context(self, action: str, error: str | None = None, **extra) -> GimdowBLEDiagContext:
-        return GimdowBLEDiagContext(
-            timestamp=time.time(),
-            address=self.address,
-            is_connected=bool(self._client and self._client.is_connected),
-            is_paired=self._is_paired,
-            is_resolving=self._is_resolving,
-            dp_state={
-                f"dp{dp_id}": dp.value
-                for dp_id, dp in self._datapoints._datapoints.items()
-            },
-            action=action,
-            error=error,
-            extra={
-                "protocol_version": self._protocol_version,
-                "is_bound": self._is_bound,
-                **extra,
-            },
-        )
-
+    def get_lock_state(self, state_dp_id: int) -> bool | None:
+        """Return True=Locked, False=Unlocked, None=Unknown."""
+        dp = self._datapoints[state_dp_id]
+        if dp:
+            return not bool(dp.value)  # DP True = Unlocked → is_locked = False
+        return None
