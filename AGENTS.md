@@ -82,6 +82,7 @@ BREAKING CHANGE: force_lock renamed to force_lock_twice.
    - `.release-please-manifest.json` is **not** touched by dev (separate manifest files), so no conflict resolution needed
 2. release-please opens a Release PR on `main`
 3. Merge it → stable tag `vX.Y.Z`, GitHub Release published
+4. CI automatically resets `.release-please-manifest-dev.json` on `dev` to the new stable version — dev's next beta cycle starts fresh from that base (e.g. `3.0.0` → `3.1.0-beta.0` on the next `feat:` commit)
 
 ### Version format
 
