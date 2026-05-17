@@ -9,7 +9,7 @@ from struct import pack, unpack
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-from Crypto.Cipher import AES
+from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
 
 from custom_components.gimdow_ble.gimdow_ble.const import (
     GATT_MTU,
@@ -114,8 +114,8 @@ def _make_encrypted_buffer(
         raw += pack(">H", GimdowBLEProtocol._calc_crc16(bytes(raw)))
     while len(raw) % 16 != 0:
         raw += b"\x00"
-    cipher = AES.new(key, AES.MODE_CBC, iv)
-    return bytes([security_flag]) + iv + cipher.encrypt(bytes(raw))
+    encryptor = Cipher(algorithms.AES(key), modes.CBC(iv)).encryptor()
+    return bytes([security_flag]) + iv + encryptor.update(bytes(raw)) + encryptor.finalize()
 
 
 def _decode_packet0(pkt: bytes) -> tuple[int, int, bytes]:
@@ -142,8 +142,8 @@ def _reassemble(packets: list[bytes]) -> bytes:
 def _decrypt_payload(key: bytes, payload: bytes) -> bytes:
     iv = payload[1:17]
     ciphertext = payload[17:]
-    cipher = AES.new(key, AES.MODE_CBC, iv)
-    return cipher.decrypt(ciphertext)
+    decryptor = Cipher(algorithms.AES(key), modes.CBC(iv)).decryptor()
+    return decryptor.update(ciphertext) + decryptor.finalize()
 
 
 # ---------------------------------------------------------------------------
@@ -787,8 +787,8 @@ class TestParseInput:
         raw += pack(">H", GimdowBLEProtocol._calc_crc16(bytes(raw)))
         while len(raw) % 16 != 0:
             raw += b"\x00"
-        cipher = AES.new(key, AES.MODE_CBC, iv)
-        proto._input_buffer = bytearray(b"\x04" + iv + cipher.encrypt(bytes(raw)))
+        encryptor = Cipher(algorithms.AES(key), modes.CBC(iv)).encryptor()
+        proto._input_buffer = bytearray(b"\x04" + iv + encryptor.update(bytes(raw)) + encryptor.finalize())
         proto._parse_input()
         assert proto._input_buffer is None
 

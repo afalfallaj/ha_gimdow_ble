@@ -16,6 +16,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import random
+from time import monotonic as _monotonic
 from collections.abc import Callable
 
 from bleak.backends.device import BLEDevice
@@ -426,6 +427,7 @@ class GimdowBLEConnection:
                     self.address,
                     self.rssi,
                 )
+                self._last_connect_time = _monotonic()
                 self._schedule_keep_alive()
                 self._fire_connected_callbacks()
             else:

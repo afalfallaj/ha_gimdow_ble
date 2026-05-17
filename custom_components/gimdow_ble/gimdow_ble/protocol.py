@@ -27,7 +27,7 @@ import time
 from struct import pack, unpack
 from typing import Any
 
-from Crypto.Cipher import AES
+from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
 
 from .const import (
     CHARACTERISTIC_NOTIFY,
@@ -61,6 +61,7 @@ class GimdowBLEProtocol:
         self._input_expected_packet_num: int = 0
         self._input_expected_length: int = 0
         self._input_expected_responses: dict[int, asyncio.Future] = {}
+        self._last_connect_time: float = 0.0
 
         self._auth_key: bytes | None = None
         self._login_key: bytes | None = None
@@ -147,8 +148,8 @@ class GimdowBLEProtocol:
         while len(raw) % 16 != 0:
             raw += b"\x00"
 
-        cipher = AES.new(key, AES.MODE_CBC, iv)
-        encrypted = security_flag + iv + cipher.encrypt(raw)
+        encryptor = Cipher(algorithms.AES(key), modes.CBC(iv)).encryptor()
+        encrypted = security_flag + iv + encryptor.update(bytes(raw)) + encryptor.finalize()
 
         command = []
         packet_num = 0
@@ -413,8 +414,8 @@ class GimdowBLEProtocol:
         encrypted = self._input_buffer[17:]
         self._clean_input()
 
-        cipher = AES.new(key, AES.MODE_CBC, iv)
-        raw = cipher.decrypt(encrypted)
+        decryptor = Cipher(algorithms.AES(key), modes.CBC(bytes(iv))).decryptor()
+        raw = decryptor.update(bytes(encrypted)) + decryptor.finalize()
 
         seq_num, response_to, _code, length = unpack(">IIHH", raw[:12])
         data_end_pos = length + 12
@@ -469,13 +470,15 @@ class GimdowBLEProtocol:
                 )
                 self._clean_input()
             else:
-                _LOGGER.error(
-                    "%s: Unexpected packet #%s (expected %s)",
+                _LOGGER.warning(
+                    "%s: Unexpected packet #%s (expected %s) — %.1fs since last connect",
                     self.address,
                     packet_num,
                     self._input_expected_packet_num,
+                    time.monotonic() - self._last_connect_time,
                 )
                 self._clean_input()
+                return
 
         if packet_num == self._input_expected_packet_num:
             if packet_num == 0:
@@ -485,11 +488,12 @@ class GimdowBLEProtocol:
             self._input_buffer += data[pos:]
             self._input_expected_packet_num += 1
         else:
-            _LOGGER.error(
-                "%s: Missing packet #%s (received %s)",
+            _LOGGER.warning(
+                "%s: Missing packet #%s (received %s) — %.1fs since last connect",
                 self.address,
                 self._input_expected_packet_num,
                 packet_num,
+                time.monotonic() - self._last_connect_time,
             )
             self._clean_input()
             return
