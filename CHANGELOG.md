@@ -6,6 +6,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [3.0.0-beta.7](https://github.com/afalfallaj/ha_gimdow_ble/compare/v3.0.0-beta.6...v3.0.0-beta.7) (2026-05-17)
+
+
+### ### Features
+
+* sync dev manifest after stable release and update documentation ([98c4329](https://github.com/afalfallaj/ha_gimdow_ble/commit/98c4329e256f61ca2e6f8f9408f68fa7ac3dbdef))
+
 ## [3.0.0-beta.6](https://github.com/afalfallaj/ha_gimdow_ble/compare/v3.0.0-beta.5...v3.0.0-beta.6) (2026-05-17)
 
 
