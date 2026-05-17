@@ -386,20 +386,28 @@ class TestUpdateAttribution:
 
 
 class TestDoubleCommandToState:
-    async def test_echo_timeout_sets_timeout_unknown(self) -> None:
-        """is_timeout_unknown=True when the single echo wait times out (S6)."""
+    async def test_both_echo_timeout_sets_timeout_unknown(self) -> None:
+        """TIMEOUT_UNKNOWN when both attempts time out."""
         mgr, _, device = _make_manager(is_locked_return=None)
         device.send_command_wait_state_echo = AsyncMock(return_value=False)
 
         await mgr._double_command_to_state(True)
 
         assert mgr.is_timeout_unknown is True
+        assert device.send_command_wait_state_echo.call_count == 2
+
+    async def test_always_sends_two_commands(self) -> None:
+        """Both commands are always sent even when attempt 1 echo confirms target state."""
+        mgr, _, device = _make_manager(is_locked_return=True)
+        device.send_command_wait_state_echo = AsyncMock(return_value=True)
+
+        await mgr._double_command_to_state(True)
+
+        assert device.send_command_wait_state_echo.call_count == 2
 
     async def test_echo_success_clears_flags(self) -> None:
-        """is_timeout_unknown=False and transition cleared when echo confirms target state."""
-        mgr, _, device = _make_manager(
-            is_locked_return=True
-        )  # device is locked after echo
+        """is_timeout_unknown=False and transition cleared after both echoes confirm."""
+        mgr, _, device = _make_manager(is_locked_return=True)
         device.send_command_wait_state_echo = AsyncMock(return_value=True)
 
         await mgr._double_command_to_state(True)
@@ -407,6 +415,16 @@ class TestDoubleCommandToState:
         assert mgr.is_timeout_unknown is False
         assert mgr.is_locking is False
         assert mgr.is_unlocking is False
+
+    async def test_attempt1_timeout_still_sends_attempt2(self) -> None:
+        """No echo on attempt 1 must not abort — attempt 2 is always sent."""
+        mgr, _, device = _make_manager(is_locked_return=False)
+        device.send_command_wait_state_echo = AsyncMock(side_effect=[False, True])
+
+        await mgr._double_command_to_state(False)
+
+        assert device.send_command_wait_state_echo.call_count == 2
+        assert mgr.is_timeout_unknown is False
 
     async def test_cancelled_error_raises_and_cleans_up(self) -> None:
         mgr, _, device = _make_manager(is_locked_return=None)
@@ -440,24 +458,6 @@ class TestDoubleCommandToState:
         await mgr._double_command_to_state(target_lock=False)
 
         mgr.start_auto_lock_timer.assert_called()
-
-    async def test_force_two_attempts_always_sends_second_command(self) -> None:
-        """force_two_attempts=True must send both commands even when attempt 1 reaches target."""
-        mgr, _, device = _make_manager(is_locked_return=True)
-        device.send_command_wait_state_echo = AsyncMock(return_value=True)
-
-        await mgr._double_command_to_state(True, force_two_attempts=True)
-
-        assert device.send_command_wait_state_echo.call_count == 2
-
-    async def test_without_force_two_attempts_exits_after_first_success(self) -> None:
-        """Without force_two_attempts, successful attempt 1 exits early."""
-        mgr, _, device = _make_manager(is_locked_return=True)
-        device.send_command_wait_state_echo = AsyncMock(return_value=True)
-
-        await mgr._double_command_to_state(True, force_two_attempts=False)
-
-        assert device.send_command_wait_state_echo.call_count == 1
 
 
 # ---------------------------------------------------------------------------

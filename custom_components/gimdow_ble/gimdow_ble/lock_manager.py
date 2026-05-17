@@ -341,7 +341,7 @@ class GimdowBLELockManager:
             )
             if not self._resolution_active:
                 self._resolution_task = self._hass.async_create_task(
-                    self._double_command_to_state(True, force_two_attempts=True),
+                    self._double_command_to_state(True),
                     name="gimdow_force_lock_twice_resolution",
                 )
 
@@ -600,33 +600,20 @@ class GimdowBLELockManager:
                 action,
             )
 
-    async def _double_command_to_state(
-        self, target_lock: bool, *, force_two_attempts: bool = False
-    ) -> None:
-        """Drive the lock to target_lock using up to two DP47-echo-driven sends.
+    async def _double_command_to_state(self, target_lock: bool) -> None:
+        """Drive the lock to target_lock by always running exactly two motor cycles.
 
-        Each attempt uses send_command_wait_state_echo so we know the motor cycle
-        finished before issuing the next command — no fixed sleep guards needed.
-        The device reliably pushes DP47 after every motor movement, so waiting for
-        the echo is both faster and more robust than a fixed delay.
+        The Gimdow device can push a false-positive DP47 echo after the first cycle.
+        Waiting for that echo confirms the first motor operation completed, then the
+        second command is always sent regardless of reported state — eliminating any
+        chance the first echo was a false positive.
 
-        force_two_attempts: always run both motor cycles even if attempt 1 already
-        reaches the target state. Required for force_lock_twice where the second
-        cycle physically re-engages the deadbolt regardless of reported state.
-
-        Flow (force_two_attempts=False):
-          attempt 1: send → wait DP47 echo
-            → echo + correct state  → done (fast path, ~1-2 s real-world)
-            → echo + wrong state    → attempt 2
-            → no echo (timeout)     → attempt 2
+        Flow:
+          attempt 1: send → wait DP47 echo (confirms first motor cycle ran)
+            → echo (any state) → proceed to attempt 2
+            → no echo (timeout) → proceed to attempt 2
           attempt 2: send → wait DP47 echo
-            → echo  → done
-            → no echo → TIMEOUT_UNKNOWN
-
-        Flow (force_two_attempts=True):
-          attempt 1: send → wait DP47 echo (always continues to attempt 2)
-          attempt 2: send → wait DP47 echo
-            → echo  → done
+            → echo → done (success)
             → no echo → TIMEOUT_UNKNOWN
         """
         if target_lock and self._is_door_open:
@@ -674,18 +661,12 @@ class GimdowBLELockManager:
                         current,
                         target_lock,
                     )
-                    if current == target_lock and not (force_two_attempts and attempt == 1):
+                    if attempt == 2:
                         if not target_lock:
                             self.start_auto_lock_timer()
                         return
-                    if current != target_lock:
-                        # Echo arrived but wrong state — send again
-                        _LOGGER.debug(
-                            "[%s] double_command: attempt %d wrong state after echo — retrying.",
-                            self._device.address,
-                            attempt,
-                        )
-                    # else: force_two_attempts on attempt 1 — continue to attempt 2
+                    # Attempt 1 echo received — first motor cycle confirmed.
+                    # Always proceed to attempt 2 regardless of reported state.
                 else:
                     _LOGGER.debug(
                         "[%s] double_command: attempt %d — no DP47 echo within %ss.",
@@ -867,10 +848,7 @@ class GimdowBLELockManager:
             "LOCK" if target else "UNLOCK",
         )
         self._resolution_task = self._hass.async_create_task(
-            self._double_command_to_state(
-                target,
-                force_two_attempts=(action == UNKNOWN_STATE_ACTION_FORCE_LOCK_TWICE),
-            ),
+            self._double_command_to_state(target),
             name="gimdow_timeout_recovery_resolution",
         )
 
