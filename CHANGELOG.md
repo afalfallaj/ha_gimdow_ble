@@ -6,6 +6,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [3.0.0-beta.2](https://github.com/afalfallaj/ha_gimdow_ble/compare/v3.0.0-beta.1...v3.0.0-beta.2) (2026-05-17)
+
+
+### ### Refactoring
+
+* replace AES with cryptography library for encryption and decryption ([d87e98b](https://github.com/afalfallaj/ha_gimdow_ble/commit/d87e98bc9d3a39ac4eb01cfb4137ec5c26e8388f))
+
 ## [3.0.0-beta.1](https://github.com/afalfallaj/ha_gimdow_ble/compare/v3.0.0-beta.0...v3.0.0-beta.1) (2026-05-16)
 
 
