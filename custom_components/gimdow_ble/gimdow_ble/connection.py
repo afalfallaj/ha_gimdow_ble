@@ -356,6 +356,7 @@ class GimdowBLEConnection:
         """
         try:
             await client.start_notify(CHARACTERISTIC_NOTIFY, self._notification_handler)
+            await asyncio.sleep(0.1)
             return True
         except Exception as ex:
             _LOGGER.warning(

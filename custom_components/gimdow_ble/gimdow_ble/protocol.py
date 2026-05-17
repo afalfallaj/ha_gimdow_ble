@@ -497,7 +497,7 @@ class GimdowBLEProtocol:
             self._input_expected_packet_num += 1
         else:
             _LOGGER.warning(
-                "%s: Missing packet #%s (received %s) — %.1fs since last connect, last msg: #%s %s",
+                "%s: Missing packet #%s (received %s) — %.1fs since last connect, last msg: #%s %s — requesting state refresh",
                 self.address,
                 self._input_expected_packet_num,
                 packet_num,
@@ -506,6 +506,7 @@ class GimdowBLEProtocol:
                 self._last_good_code_name,
             )
             self._clean_input()
+            self.schedule_update()
             return
 
         if len(self._input_buffer) > self._input_expected_length:
