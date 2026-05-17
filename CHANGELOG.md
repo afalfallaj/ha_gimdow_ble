@@ -6,6 +6,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [3.0.0-beta.4](https://github.com/afalfallaj/ha_gimdow_ble/compare/v3.0.0-beta.3...v3.0.0-beta.4) (2026-05-17)
+
+
+### ### Refactoring
+
+* simplify double command logic to always send two commands for lock state changes ([a3dad8f](https://github.com/afalfallaj/ha_gimdow_ble/commit/a3dad8fccca285ec3c3d7deaa93c64762f46553e))
+
 ## [3.0.0-beta.3](https://github.com/afalfallaj/ha_gimdow_ble/compare/v3.0.0-beta.2...v3.0.0-beta.3) (2026-05-17)
 
 
