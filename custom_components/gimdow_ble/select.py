@@ -1,4 +1,5 @@
 """The Gimdow BLE integration."""
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -10,7 +11,6 @@ from homeassistant.components.select import (
     SelectEntity,
 )
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.const import UnitOfTemperature
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity import EntityCategory
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
@@ -19,7 +19,13 @@ from homeassistant.helpers.restore_state import RestoreEntity
 
 
 from .const import DOMAIN
-from .devices import GimdowBLEData, GimdowBLEEntity, GimdowBLEProductInfo
+from .devices import (
+    GimdowBLECategoryMapping,
+    GimdowBLEData,
+    GimdowBLEEntity,
+    GimdowBLEProductInfo,
+    get_platform_mapping,
+)
 from .gimdow_ble import GimdowBLEDataPointType, GimdowBLEDevice
 
 _LOGGER = logging.getLogger(__name__)
@@ -34,21 +40,7 @@ class GimdowBLESelectMapping:
     value_mapping: dict[str, str] | None = None
 
 
-@dataclass
-class TemperatureUnitDescription(SelectEntityDescription):
-    key: str = "temperature_unit"
-    icon: str = "mdi:thermometer"
-    entity_category: EntityCategory = EntityCategory.CONFIG
-
-
-
-
-
-@dataclass
-class GimdowBLECategorySelectMapping:
-    products: dict[str, list[GimdowBLESelectMapping]] | None = None
-    mapping: list[GimdowBLESelectMapping] | None = None
-
+GimdowBLECategorySelectMapping = GimdowBLECategoryMapping[GimdowBLESelectMapping]
 
 mapping: dict[str, GimdowBLECategorySelectMapping] = {
     "jtmspro": GimdowBLECategorySelectMapping(
@@ -74,20 +66,8 @@ mapping: dict[str, GimdowBLECategorySelectMapping] = {
 }
 
 
-def get_mapping_by_device(
-    device: GimdowBLEDevice
-) -> list[GimdowBLECategorySelectMapping]:
-    category = mapping.get(device.category)
-    if category is not None and category.products is not None:
-        product_mapping = category.products.get(device.product_id)
-        if product_mapping is not None:
-            return product_mapping
-        if category.mapping is not None:
-            return category.mapping
-        else:
-            return []
-    else:
-        return []
+def get_mapping_by_device(device: GimdowBLEDevice) -> list[GimdowBLESelectMapping]:
+    return get_platform_mapping(mapping, device)
 
 
 class GimdowBLESelect(GimdowBLEEntity, SelectEntity, RestoreEntity):
@@ -95,19 +75,12 @@ class GimdowBLESelect(GimdowBLEEntity, SelectEntity, RestoreEntity):
 
     def __init__(
         self,
-        hass: HomeAssistant,
         coordinator: DataUpdateCoordinator,
         device: GimdowBLEDevice,
         product: GimdowBLEProductInfo,
         mapping: GimdowBLESelectMapping,
     ) -> None:
-        super().__init__(
-            hass,
-            coordinator,
-            device,
-            product,
-            mapping.description
-        )
+        super().__init__(coordinator, device, product, mapping.description)
         self._mapping = mapping
         self._attr_options = mapping.description.options
 
@@ -115,12 +88,12 @@ class GimdowBLESelect(GimdowBLEEntity, SelectEntity, RestoreEntity):
         """Handle entity which will be added."""
         await super().async_added_to_hass()
 
-        if self._product.lock:
+        if self._product.is_lock:
             if (last_state := await self.async_get_last_state()) is not None:
                 if last_state.state != "unknown":
                     value = last_state.state
                     raw_value = None
-                    
+
                     # Reverse lookup if value mapping exists
                     if self._mapping.value_mapping:
                         for k, v in self._mapping.value_mapping.items():
@@ -130,9 +103,9 @@ class GimdowBLESelect(GimdowBLEEntity, SelectEntity, RestoreEntity):
                     # Else check if it's an option index
                     elif value in self._attr_options:
                         raw_value = self._attr_options.index(value)
-                    
+
                     if raw_value is not None:
-                         # Default to DT_ENUM if not specified, assumption based on select usage
+                        # Default to DT_ENUM if not specified, assumption based on select usage
                         dptype = self._mapping.dp_type or GimdowBLEDataPointType.DT_ENUM
                         self._device.datapoints.get_or_create(
                             self._mapping.dp_id,
@@ -150,11 +123,16 @@ class GimdowBLESelect(GimdowBLEEntity, SelectEntity, RestoreEntity):
             value = datapoint.value
             if self._mapping.value_mapping:
                 return self._mapping.value_mapping.get(value)
-            elif isinstance(value, int) and value >= 0 and value < len(self._attr_options):
+            elif (
+                isinstance(value, int)
+                and value >= 0
+                and value < len(self._attr_options)
+            ):
                 return self._attr_options[value]
-            else:
+            elif isinstance(value, str):
                 return value
-        
+            else:
+                return None
 
         return None
 
@@ -164,10 +142,10 @@ class GimdowBLESelect(GimdowBLEEntity, SelectEntity, RestoreEntity):
             if self._mapping.value_mapping:
                 key = next(
                     (k for k, v in self._mapping.value_mapping.items() if v == value),
-                    None
+                    None,
                 )
                 if key:
-                     # For string/enum mapped values, we send the key (e.g. "function1")
+                    # For string/enum mapped values, we send the key (e.g. "function1")
                     dptype = self._mapping.dp_type or GimdowBLEDataPointType.DT_STRING
                     datapoint = self._device.datapoints.get_or_create(
                         self._mapping.dp_id,
@@ -197,15 +175,15 @@ async def async_setup_entry(
     mappings = get_mapping_by_device(data.device)
     entities: list[GimdowBLESelect] = []
     for mapping in mappings:
-        if (
-            mapping.force_add or
-            data.device.datapoints.has_id(mapping.dp_id, mapping.dp_type)
+        if mapping.force_add or data.device.datapoints.has_id(
+            mapping.dp_id, mapping.dp_type
         ):
-            entities.append(GimdowBLESelect(
-                hass,
-                data.coordinator,
-                data.device,
-                data.product,
-                mapping,
-            ))
+            entities.append(
+                GimdowBLESelect(
+                    data.coordinator,
+                    data.device,
+                    data.product,
+                    mapping,
+                )
+            )
     async_add_entities(entities)

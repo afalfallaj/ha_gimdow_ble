@@ -1,0 +1,41 @@
+name: Release Please
+
+on:
+  push:
+    branches:
+      - main
+      - dev
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  release-please:
+    name: Release Please
+    runs-on: ubuntu-latest
+    steps:
+      - name: Run release-please (stable)
+        id: release-stable
+        if: github.ref == 'refs/heads/main'
+        uses: googleapis/release-please-action@v5
+        with:
+          config-file: .github/release-please-config.json
+          manifest-file: .release-please-manifest.json
+          token: ${{ secrets.GH_TOKEN || secrets.GITHUB_TOKEN }}
+
+      - name: Run release-please (pre-release)
+        id: release-prerelease
+        if: github.ref == 'refs/heads/dev'
+        uses: googleapis/release-please-action@v5
+        with:
+          config-file: .github/release-please-config-dev.json
+          manifest-file: .release-please-manifest-dev.json
+          token: ${{ secrets.GH_TOKEN || secrets.GITHUB_TOKEN }}
+          target-branch: dev
+
+      - name: Auto-merge pre-release PR
+        if: github.ref == 'refs/heads/dev' && steps.release-prerelease.outputs.pr
+        env:
+          GH_TOKEN: ${{ secrets.GH_TOKEN || secrets.GITHUB_TOKEN }}
+        run: gh pr merge --merge --delete-branch --repo "${{ github.repository }}" "${{ fromJSON(steps.release-prerelease.outputs.pr).number }}"
