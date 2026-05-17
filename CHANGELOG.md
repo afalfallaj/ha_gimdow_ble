@@ -13,6 +13,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 * add tracking for last good sequence number and code name in protocol ([7f8ff12](https://github.com/afalfallaj/ha_gimdow_ble/commit/7f8ff12a8bae4e5caec697ba69c17fbe7afe6978))
 
+
+### ### Bug Fixes
+
+* update release manifest files for versioning consistency ([e47410c](https://github.com/afalfallaj/ha_gimdow_ble/commit/e47410c7e4e41e97473edfe3d601ba61530e8c5f))
+
+## [3.0.0-beta.5](https://github.com/afalfallaj/ha_gimdow_ble/compare/v3.0.0-beta.4...v3.0.0-beta.5) (2026-05-17)
+
+
+### ### Features
+
+* add tracking for last good sequence number and code name in protocol ([7f8ff12](https://github.com/afalfallaj/ha_gimdow_ble/commit/7f8ff12a8bae4e5caec697ba69c17fbe7afe6978))
+
 ## [3.0.0-beta.4](https://github.com/afalfallaj/ha_gimdow_ble/compare/v3.0.0-beta.3...v3.0.0-beta.4) (2026-05-17)
 
 
