@@ -6,6 +6,19 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [3.0.0-beta.1](https://github.com/afalfallaj/ha_gimdow_ble/compare/v3.0.0-beta.0...v3.0.0-beta.1) (2026-05-16)
+
+
+### ### Features
+
+* add auto-merge step for pre-release PRs in release workflow ([6e0d03c](https://github.com/afalfallaj/ha_gimdow_ble/commit/6e0d03cb6c0d24c4ed57bda8700ee28bd29fb077))
+
+
+### ### Bug Fixes
+
+* correct JSON parsing for auto-merge pre-release PR step ([350579d](https://github.com/afalfallaj/ha_gimdow_ble/commit/350579d7cc52dceb3b78f1b3ae06e84e398cded8))
+* specify repository in auto-merge command for pre-release PRs ([17d341f](https://github.com/afalfallaj/ha_gimdow_ble/commit/17d341f224665a2884d70f9b4a9008cd4a79b65e))
+
 ## [3.0.0-beta.0](https://github.com/afalfallaj/ha_gimdow_ble/compare/v2.0.5...v3.0.0-beta.0) (2026-05-16)
 
 > ### ⚠ Breaking Changes
