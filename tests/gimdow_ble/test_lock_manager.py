@@ -441,6 +441,24 @@ class TestDoubleCommandToState:
 
         mgr.start_auto_lock_timer.assert_called()
 
+    async def test_force_two_attempts_always_sends_second_command(self) -> None:
+        """force_two_attempts=True must send both commands even when attempt 1 reaches target."""
+        mgr, _, device = _make_manager(is_locked_return=True)
+        device.send_command_wait_state_echo = AsyncMock(return_value=True)
+
+        await mgr._double_command_to_state(True, force_two_attempts=True)
+
+        assert device.send_command_wait_state_echo.call_count == 2
+
+    async def test_without_force_two_attempts_exits_after_first_success(self) -> None:
+        """Without force_two_attempts, successful attempt 1 exits early."""
+        mgr, _, device = _make_manager(is_locked_return=True)
+        device.send_command_wait_state_echo = AsyncMock(return_value=True)
+
+        await mgr._double_command_to_state(True, force_two_attempts=False)
+
+        assert device.send_command_wait_state_echo.call_count == 1
+
 
 # ---------------------------------------------------------------------------
 # TestOnCoordinatorUpdate
