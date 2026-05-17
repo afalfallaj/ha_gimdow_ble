@@ -6,6 +6,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [3.0.0-beta.3](https://github.com/afalfallaj/ha_gimdow_ble/compare/v3.0.0-beta.2...v3.0.0-beta.3) (2026-05-17)
+
+
+### ### Features
+
+* enhance double command logic to support forced two attempts for locking/unlocking ([2c7ac66](https://github.com/afalfallaj/ha_gimdow_ble/commit/2c7ac6620936a04f265e1f6dc65c2cbd03f553e2))
+
 ## [3.0.0-beta.2](https://github.com/afalfallaj/ha_gimdow_ble/compare/v3.0.0-beta.1...v3.0.0-beta.2) (2026-05-17)
 
 
