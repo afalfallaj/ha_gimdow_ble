@@ -19,11 +19,14 @@ Home Assistant custom integration for the **Gimdow A1 Pro Max BLE** smart lock.
 
 | File | Mechanism |
 |---|---|
-| `.release-please-manifest.json` → `"."` | release-please internal tracking (branch-local) |
+| `.release-please-manifest.json` → `"."` | release-please tracking for **main** (stable versions only) |
+| `.release-please-manifest-dev.json` → `"."` | release-please tracking for **dev** (beta versions only) |
 | `custom_components/gimdow_ble/manifest.json` → `"version"` | release-please `extra-files` JSON path |
 | `custom_components/gimdow_ble/gimdow_ble/__init__.py` → `__version__ = "x.y.z"  # x-release-please-version` | release-please `extra-files` generic marker |
 
-When release-please merges a Release PR it updates all three in one commit. No manual edits are ever needed.
+When release-please merges a Release PR it updates all tracked files in one commit. No manual edits are ever needed.
+
+The two manifest files are intentionally separate so that beta version strings from `dev` never bleed into `main`'s release computation.
 
 ---
 
@@ -70,9 +73,16 @@ BREAKING CHANGE: force_lock renamed to force_lock_twice.
 3. Merge the Release PR → `manifest.json`, `__init__.py`, `.release-please-manifest.json` updated, tag `vX.Y.Z-beta.N` pushed, GitHub pre-release created, `CHANGELOG.md` updated
 
 ### Stable (on `main`)
-1. Open PR `dev → main`, merge it — resolve `.release-please-manifest.json` conflict by keeping `main`'s value
+1. Open PR `dev → main`, use **squash and merge**
+   - Write the squash commit title as a conventional commit, e.g.:
+     - `feat!: ...` → major bump (e.g. `2.x.x` → `3.0.0`)
+     - `feat: ...` → minor bump (e.g. `2.0.5` → `2.1.0`)
+     - `fix: ...` → patch bump
+   - This is the commit release-please reads to determine the next stable version
+   - `.release-please-manifest.json` is **not** touched by dev (separate manifest files), so no conflict resolution needed
 2. release-please opens a Release PR on `main`
 3. Merge it → stable tag `vX.Y.Z`, GitHub Release published
+4. CI automatically resets `.release-please-manifest-dev.json` on `dev` to the new stable version — dev's next beta cycle starts fresh from that base (e.g. `3.0.0` → `3.1.0-beta.0` on the next `feat:` commit)
 
 ### Version format
 
@@ -102,5 +112,6 @@ These findings are confirmed by hardware test results (`test-res.txt`).
 | `.github/workflows/release-please.yml` | Runs release-please on push to `main` or `dev` |
 | `.github/release-please-config.json` | Stable release config (main) |
 | `.github/release-please-config-dev.json` | Pre-release config (dev): `versioning: prerelease`, `prerelease-type: beta.0` |
-| `.release-please-manifest.json` | Branch-local; tracks last released version — differs between `main` and `dev` |
+| `.release-please-manifest.json` | Tracks last **stable** version released from `main` — do not commit beta version strings here |
+| `.release-please-manifest-dev.json` | Tracks last **beta** version released from `dev` — managed entirely by release-please on dev |
 | `CHANGELOG.md` | Auto-updated by release-please (`changelog-path`) — do not edit manually |

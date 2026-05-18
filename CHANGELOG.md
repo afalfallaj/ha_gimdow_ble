@@ -6,16 +6,27 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
-## [3.0.0](https://github.com/afalfallaj/ha_gimdow_ble/compare/v2.0.5...v3.0.0) (2026-05-17)
+## [3.0.0-beta.8](https://github.com/afalfallaj/ha_gimdow_ble/compare/v3.0.0-beta.7...v3.0.0-beta.8) (2026-05-18)
 
 
-### ⚠ BREAKING CHANGES
+### ### Bug Fixes
 
-* overhaul integration improvements, add test suite, and migrate CI to release-please ([#27](https://github.com/afalfallaj/ha_gimdow_ble/issues/27))
+* improve logging for missing packets and handle known ESPHome proxy drop ([bcc1ece](https://github.com/afalfallaj/ha_gimdow_ble/commit/bcc1ece57ef3e60f7ada6c4f4caf45482bd91689))
+
+## [3.0.0-beta.7](https://github.com/afalfallaj/ha_gimdow_ble/compare/v3.0.0-beta.6...v3.0.0-beta.7) (2026-05-17)
+
 
 ### ### Features
 
-* overhaul integration improvements, add test suite, and migrate CI to release-please ([#27](https://github.com/afalfallaj/ha_gimdow_ble/issues/27)) ([45e88fa](https://github.com/afalfallaj/ha_gimdow_ble/commit/45e88fa233e2079a7f030472cac9edc524191da3))
+* sync dev manifest after stable release and update documentation ([98c4329](https://github.com/afalfallaj/ha_gimdow_ble/commit/98c4329e256f61ca2e6f8f9408f68fa7ac3dbdef))
+
+## [3.0.0-beta.6](https://github.com/afalfallaj/ha_gimdow_ble/compare/v3.0.0-beta.5...v3.0.0-beta.6) (2026-05-17)
+
+
+### ### Bug Fixes
+
+* schedule update on packet loss ([a493674](https://github.com/afalfallaj/ha_gimdow_ble/commit/a49367447549fdb3269e624454a9538899a7d578))
+* update release manifest files for versioning consistency ([e47410c](https://github.com/afalfallaj/ha_gimdow_ble/commit/e47410c7e4e41e97473edfe3d601ba61530e8c5f))
 
 ## [3.0.0-beta.5](https://github.com/afalfallaj/ha_gimdow_ble/compare/v3.0.0-beta.4...v3.0.0-beta.5) (2026-05-17)
 

@@ -496,16 +496,28 @@ class GimdowBLEProtocol:
             self._input_buffer += data[pos:]
             self._input_expected_packet_num += 1
         else:
-            _LOGGER.warning(
-                "%s: Missing packet #%s (received %s) — %.1fs since last connect, last msg: #%s %s",
+            _elapsed = time.monotonic() - self._last_connect_time
+            _msg = (
+                "%s: Missing packet #%s (received %s) — %.1fs since last connect, "
+                "last msg: #%s %s — requesting state refresh"
+            )
+            _args = (
                 self.address,
                 self._input_expected_packet_num,
                 packet_num,
-                time.monotonic() - self._last_connect_time,
+                _elapsed,
                 self._last_good_seq_num,
                 self._last_good_code_name,
             )
+            if self._last_good_code_name == "FUN_RECEIVE_DP":
+                # Known harmless ESPHome proxy drop: scan-event pool starves the
+                # first notification of the next message after a DP push.
+                # schedule_update() below recovers the state.
+                _LOGGER.debug(_msg, *_args)
+            else:
+                _LOGGER.warning(_msg, *_args)
             self._clean_input()
+            self.schedule_update()
             return
 
         if len(self._input_buffer) > self._input_expected_length:

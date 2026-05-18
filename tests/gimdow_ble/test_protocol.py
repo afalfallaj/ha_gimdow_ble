@@ -66,6 +66,9 @@ class _StubProtocol(GimdowBLEProtocol):
     async def _send_response(self, code, data, seq_num):
         pass
 
+    def schedule_update(self) -> None:
+        pass
+
 
 # ---------------------------------------------------------------------------
 # Helpers
