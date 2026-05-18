@@ -6,6 +6,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [3.0.0-beta.8](https://github.com/afalfallaj/ha_gimdow_ble/compare/v3.0.0-beta.7...v3.0.0-beta.8) (2026-05-18)
+
+
+### ### Bug Fixes
+
+* improve logging for missing packets and handle known ESPHome proxy drop ([bcc1ece](https://github.com/afalfallaj/ha_gimdow_ble/commit/bcc1ece57ef3e60f7ada6c4f4caf45482bd91689))
+
 ## [3.0.0-beta.7](https://github.com/afalfallaj/ha_gimdow_ble/compare/v3.0.0-beta.6...v3.0.0-beta.7) (2026-05-17)
 
 
