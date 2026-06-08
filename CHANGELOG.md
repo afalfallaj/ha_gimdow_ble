@@ -6,6 +6,20 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [3.1.0](https://github.com/afalfallaj/ha_gimdow_ble/compare/v3.0.0...v3.1.0) (2026-05-18)
+
+
+### ### Features
+
+* sync dev manifest after stable release and update documentation ([98c4329](https://github.com/afalfallaj/ha_gimdow_ble/commit/98c4329e256f61ca2e6f8f9408f68fa7ac3dbdef))
+
+
+### ### Bug Fixes
+
+* improve logging for missing packets and handle known ESPHome proxy drop ([56d3b7f](https://github.com/afalfallaj/ha_gimdow_ble/commit/56d3b7f629ae2720946e029242221b21b0b71e50))
+* improve logging for missing packets and handle known ESPHome proxy drop ([bcc1ece](https://github.com/afalfallaj/ha_gimdow_ble/commit/bcc1ece57ef3e60f7ada6c4f4caf45482bd91689))
+* schedule update on packet loss ([a493674](https://github.com/afalfallaj/ha_gimdow_ble/commit/a49367447549fdb3269e624454a9538899a7d578))
+
 ## [3.0.0](https://github.com/afalfallaj/ha_gimdow_ble/compare/v2.0.5...v3.0.0) (2026-05-18)
 
 
