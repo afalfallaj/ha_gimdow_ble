@@ -12,6 +12,7 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import CONF_ADDRESS, EVENT_HOMEASSISTANT_STOP, Platform
 from homeassistant.core import Event, HomeAssistant, callback
 from homeassistant.exceptions import ConfigEntryNotReady
+from homeassistant.helpers.dispatcher import async_dispatcher_send
 
 from .gimdow_ble import GimdowBLEDevice
 
@@ -21,7 +22,6 @@ from .const import (
     CONF_AUTO_LOCK_DELAY_FALLBACK,
     CONF_DOOR_SENSOR,
     DEFAULT_AUTO_LOCK_DELAY_FALLBACK,
-    DOMAIN,
     CONF_UNKNOWN_STATE_ACTION,
     CONF_TRANSITION_TIMEOUT,
     OPTIONS_ONLY_KEYS,
@@ -29,6 +29,8 @@ from .const import (
     UNKNOWN_STATE_ACTION_CONFIRM_LAST,
 )
 from .devices import GimdowBLECoordinator, GimdowBLEData, get_device_product_info
+
+type GimdowBLEConfigEntry = ConfigEntry[GimdowBLEData]
 
 PLATFORMS: list[Platform] = [
     Platform.BUTTON,
@@ -43,7 +45,7 @@ PLATFORMS: list[Platform] = [
 _LOGGER = logging.getLogger(__name__)
 
 
-async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
+async def async_setup_entry(hass: HomeAssistant, entry: GimdowBLEConfigEntry) -> bool:
     """Set up Gimdow BLE from a config entry."""
     address: str = entry.data[CONF_ADDRESS]
     ble_device = bluetooth.async_ble_device_from_address(
@@ -86,7 +88,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         )
     )
 
-    hass.data.setdefault(DOMAIN, {})[entry.entry_id] = GimdowBLEData(
+    data = GimdowBLEData(
         entry.title,
         device,
         product_info,
@@ -106,8 +108,21 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             )
         ),
     )
+    entry.runtime_data = data
 
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
+
+    # async_forward_entry_setups only returns once every platform's entities
+    # (and therefore every RestoreEntity restore) have finished — HA gathers
+    # all platform setup tasks before returning. NUMBER, SWITCH, BINARY_SENSOR,
+    # and LOCK are set up concurrently with no ordering guarantee between them,
+    # so the lock's auto-lock timer can be started (via the door-sensor path)
+    # before the auto_lock_time/virtual_auto_lock restores land, latching a
+    # fallback delay that nothing corrects afterwards. Re-emit the door signal
+    # now, once every entity's state is guaranteed final, so the lock
+    # recomputes the timer from fully-restored state.
+    if data.is_door_open is not None:
+        async_dispatcher_send(hass, data.door_update_signal, data.is_door_open)
 
     async def _async_stop(event: Event) -> None:
         """Close the connection."""
@@ -119,10 +134,10 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     return True
 
 
-async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
+async def async_unload_entry(hass: HomeAssistant, entry: GimdowBLEConfigEntry) -> bool:
     """Unload a config entry."""
     if unload_ok := await hass.config_entries.async_unload_platforms(entry, PLATFORMS):
-        data: GimdowBLEData = hass.data[DOMAIN].pop(entry.entry_id)
+        data = entry.runtime_data
         data.coordinator.stop()
         await data.device.stop()
 

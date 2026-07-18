@@ -345,20 +345,6 @@ class GimdowBLELockManager:
                     name="gimdow_force_lock_twice_resolution",
                 )
 
-    def restore_last_known_state(self, is_locked: bool) -> None:
-        """Seed _last_known_state from HA's RestoreEntity after a restart.
-
-        Only applied when there is no live DP reading yet — a fresh BLE
-        notification always takes precedence over the restored value.
-        """
-        if self._last_known_state is None:
-            self._last_known_state = is_locked
-            _LOGGER.debug(
-                "[%s] Restored last known state: %s",
-                self._device.address,
-                "LOCKED" if is_locked else "UNLOCKED",
-            )
-
     def on_coordinator_update(self, is_locked: bool | None) -> None:
         """Called by the HA entity after every coordinator update.
 

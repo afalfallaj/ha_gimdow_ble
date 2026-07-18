@@ -262,6 +262,94 @@ class TestAutoLockTimer:
 
 
 # ---------------------------------------------------------------------------
+# TestAutoLockTimerRestoreRace — restart restore-ordering regression
+#
+# On a full HA restart, start_auto_lock_timer() can run (via the door-sensor
+# path) before the auto_lock_time NUMBER entity has finished restoring DP36
+# into the datapoint cache — HA sets up all platforms concurrently, with no
+# ordering guarantee between them. If that race is lost, the timer latches
+# onto auto_lock_delay_fallback instead of the user's configured delay, and
+# the coordinator's safety net never corrects it afterwards because it only
+# fires when _auto_lock_timer is None. The integration's fix re-dispatches
+# the door signal once every platform's entities are guaranteed restored,
+# forcing exactly the stop-and-replace this test asserts.
+# ---------------------------------------------------------------------------
+
+
+class TestAutoLockTimerRestoreRace:
+    def test_falls_back_when_datapoint_absent(self) -> None:
+        mgr, _, device = _make_manager(virtual_auto_lock=True, is_locked_return=False)
+        device.datapoints.__getitem__.return_value = None  # DP36 not yet restored
+        mgr.on_door_changed(False)  # mark door state known + first (racy) trigger
+
+        with patch(
+            "custom_components.gimdow_ble.gimdow_ble.lock_manager.async_call_later"
+        ) as mock_acl:
+            mock_acl.return_value = MagicMock()
+            mgr.start_auto_lock_timer()
+
+        assert mock_acl.call_args.args[1] == 30  # auto_lock_delay_fallback
+
+    def test_uses_restored_delay_when_datapoint_present(self) -> None:
+        mgr, _, device = _make_manager(virtual_auto_lock=True, is_locked_return=False)
+        fake_dp = MagicMock()
+        fake_dp.value = 300
+        device.datapoints.__getitem__.return_value = fake_dp
+        mgr.on_door_changed(False)
+
+        with patch(
+            "custom_components.gimdow_ble.gimdow_ble.lock_manager.async_call_later"
+        ) as mock_acl:
+            mock_acl.return_value = MagicMock()
+            mgr.start_auto_lock_timer()
+
+        assert mock_acl.call_args.args[1] == 300
+
+    def test_late_restore_cancels_and_replaces_fallback_timer(self) -> None:
+        """The actual bug-fix contract: a re-trigger after DP36 finally lands
+        must cancel the wrongly-delayed timer, not leave it running forever."""
+        mgr, _, device = _make_manager(virtual_auto_lock=True, is_locked_return=False)
+        device.datapoints.__getitem__.return_value = None  # racy: not restored yet
+
+        first_cancel = MagicMock()
+        with patch(
+            "custom_components.gimdow_ble.gimdow_ble.lock_manager.async_call_later"
+        ) as mock_acl:
+            mock_acl.return_value = first_cancel
+            mgr.on_door_changed(False)  # first (racy) trigger — latches fallback
+            assert mock_acl.call_args.args[1] == 30
+
+        # NUMBER entity's restore lands late, populating DP36 = 300s.
+        fake_dp = MagicMock()
+        fake_dp.value = 300
+        device.datapoints.__getitem__.return_value = fake_dp
+
+        # __init__.py's post-forward re-dispatch fires the door signal again.
+        with patch(
+            "custom_components.gimdow_ble.gimdow_ble.lock_manager.async_call_later"
+        ) as mock_acl:
+            mock_acl.return_value = MagicMock()
+            mgr.on_door_changed(False)
+            assert mock_acl.call_args.args[1] == 300
+
+        first_cancel.assert_called_once()
+
+    def test_safety_net_does_not_correct_an_already_running_timer(self) -> None:
+        """Documents why the re-dispatch fix is necessary: on_coordinator_update's
+        safety net is gated on _auto_lock_timer is None, so once ANY timer is
+        running (even with the wrong delay), it will not self-correct on its
+        own — something must explicitly call start_auto_lock_timer() again."""
+        mgr, _, _ = _make_manager(virtual_auto_lock=True)
+        mgr._auto_lock_timer = MagicMock()  # a (possibly wrong-delay) timer exists
+        mgr._is_door_open = False
+        mgr.start_auto_lock_timer = MagicMock()
+
+        mgr.on_coordinator_update(False)
+
+        mgr.start_auto_lock_timer.assert_not_called()
+
+
+# ---------------------------------------------------------------------------
 # TestAutoLockProperty (N4)
 # ---------------------------------------------------------------------------
 

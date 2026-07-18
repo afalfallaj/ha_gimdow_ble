@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from enum import StrEnum
-from typing_extensions import Final
+from typing import Final
 
 from .countries import Country, TUYA_COUNTRIES
 

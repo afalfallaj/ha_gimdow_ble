@@ -102,6 +102,7 @@ These findings are confirmed by hardware test results (`test-res.txt`).
 | DP47 on manual operation | **DP47 IS pushed** when the user manually operates the lock while BLE is connected. Echo arrives in ~5–9 s depending on direction. State is tracked correctly without any special handling. |
 | DP47 on reconnect | DP47 is **NOT** pushed by the device after a BLE reconnect. The integration clears the stale value on reconnect and relies on the configured unknown-state strategy to resolve position. |
 | DP47 double-command timing | When two commands are sent (double-command pattern), the device pushes DP47 after the second motor operation completes. Observed echo times: ~8.7 s (lock) and ~17.3 s (unlock). Well within the 60 s default timeout. |
+| No HA-state restore for lock position | `lock.py` deliberately does **not** restore last-known "locked"/"unlocked" from Home Assistant's entity state history (`RestoreEntity`) on startup. A restored value can go stale during any HA-down window (the lock can be operated manually while HA is off) and can't be corroborated by a fresh device read on reconnect, since DP47 isn't re-pushed (see above) — reasserting it via a double-command risks overwriting a legitimate manual operation. `GimdowBLELockManager._last_known_state` is seeded **exclusively** from live DP47 pushes via `on_coordinator_update()`; after a full HA restart it starts unknown, so `confirm_last`/`force_lock_twice` stay unknown until the device reports a real reading (they still resolve immediately from a live reconnect within an already-running session, once traffic has populated `_last_known_state`). **Do not reintroduce `RestoreEntity`/`async_get_last_state()`-based state restore in `lock.py`** — this was deliberately removed, not an oversight. |
 
 ---
 
@@ -110,8 +111,11 @@ These findings are confirmed by hardware test results (`test-res.txt`).
 | File | Purpose |
 |---|---|
 | `.github/workflows/release-please.yml` | Runs release-please on push to `main` or `dev` |
+| `.github/workflows/validate.yml` | Runs `hassfest` and HACS validation (`hacs/action`) on push, PR, a daily schedule, and manual dispatch |
 | `.github/release-please-config.json` | Stable release config (main) |
 | `.github/release-please-config-dev.json` | Pre-release config (dev): `versioning: prerelease`, `prerelease-type: beta.0` |
 | `.release-please-manifest.json` | Tracks last **stable** version released from `main` — do not commit beta version strings here |
 | `.release-please-manifest-dev.json` | Tracks last **beta** version released from `dev` — managed entirely by release-please on dev |
 | `CHANGELOG.md` | Auto-updated by release-please (`changelog-path`) — do not edit manually |
+
+`hacs.json`'s `"homeassistant"` minimum-version floor is **manually maintained** — release-please and the CI workflows above never touch it. Bump it whenever a change starts relying on a newer HA API (e.g. it was raised to `2025.8.0` because `config_flow.py` uses `OptionsFlowWithReload`, added in that HA release). A stale floor doesn't fail CI; it just lets HACS install the integration onto HA versions where an import silently breaks.

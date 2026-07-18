@@ -5,23 +5,22 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 import logging
+from typing import Any
 
 from homeassistant.components.select import (
     SelectEntityDescription,
     SelectEntity,
 )
-from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity import EntityCategory
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
-from homeassistant.helpers.restore_state import RestoreEntity
+from homeassistant.helpers.restore_state import ExtraStoredData, RestoreEntity
 
 
-from .const import DOMAIN
+from . import GimdowBLEConfigEntry
 from .devices import (
     GimdowBLECategoryMapping,
-    GimdowBLEData,
     GimdowBLEEntity,
     GimdowBLEProductInfo,
     get_platform_mapping,
@@ -70,6 +69,28 @@ def get_mapping_by_device(device: GimdowBLEDevice) -> list[GimdowBLESelectMappin
     return get_platform_mapping(mapping, device)
 
 
+@dataclass
+class _SelectExtraData(ExtraStoredData):
+    """Persisted independently of entity availability.
+
+    A lock that's disconnected (past its grace period) when HA stops dumps
+    state="unavailable", which .state-parsing on restore would silently
+    discard — same failure as number.py/switch.py.
+    """
+
+    option: str | None
+
+    def as_dict(self) -> dict[str, Any]:
+        return {"option": self.option}
+
+    @classmethod
+    def from_dict(cls, restored: dict[str, Any]) -> _SelectExtraData | None:
+        try:
+            return cls(restored["option"])
+        except KeyError:
+            return None
+
+
 class GimdowBLESelect(GimdowBLEEntity, SelectEntity, RestoreEntity):
     """Representation of a Gimdow BLE select."""
 
@@ -84,14 +105,20 @@ class GimdowBLESelect(GimdowBLEEntity, SelectEntity, RestoreEntity):
         self._mapping = mapping
         self._attr_options = mapping.description.options
 
+    @property
+    def extra_restore_state_data(self) -> _SelectExtraData:
+        return _SelectExtraData(self.current_option)
+
     async def async_added_to_hass(self) -> None:
         """Handle entity which will be added."""
         await super().async_added_to_hass()
 
         if self._product.is_lock:
-            if (last_state := await self.async_get_last_state()) is not None:
-                if last_state.state != "unknown":
-                    value = last_state.state
+            if (last_extra := await self.async_get_last_extra_data()) is not None:
+                restored = _SelectExtraData.from_dict(last_extra.as_dict())
+                value = restored.option if restored is not None else None
+
+                if value is not None:
                     raw_value = None
 
                     # Reverse lookup if value mapping exists
@@ -167,11 +194,11 @@ class GimdowBLESelect(GimdowBLEEntity, SelectEntity, RestoreEntity):
 
 async def async_setup_entry(
     hass: HomeAssistant,
-    entry: ConfigEntry,
+    entry: GimdowBLEConfigEntry,
     async_add_entities: AddEntitiesCallback,
 ) -> None:
     """Set up the Gimdow BLE sensors."""
-    data: GimdowBLEData = hass.data[DOMAIN][entry.entry_id]
+    data = entry.runtime_data
     mappings = get_mapping_by_device(data.device)
     entities: list[GimdowBLESelect] = []
     for mapping in mappings:

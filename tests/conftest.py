@@ -58,6 +58,77 @@ class _CoordinatorEntity:
     def __init__(self, coordinator):
         pass
 
+    def __class_getitem__(cls, item):
+        return cls
+
+
+# ---------------------------------------------------------------------------
+# Entity / RestoreEntity / RestoreNumber / ExtraStoredData stubs
+#
+# Real enough to exercise async_added_to_hass()'s restore logic in number.py
+# and switch.py: a genuine (non-MagicMock) class chain so `class Foo(Bar,
+# RestoreNumber)` — style multiple inheritance resolves the same way it does
+# against real Home Assistant, plus per-instance knobs (`_stub_last_*`) tests
+# set to control what a "restore" returns.
+# ---------------------------------------------------------------------------
+
+
+class _Entity:
+    """Minimal stand-in for homeassistant.helpers.entity.Entity."""
+
+    hass = None
+
+    async def async_added_to_hass(self) -> None:
+        pass
+
+    def async_write_ha_state(self) -> None:
+        pass
+
+    def async_on_remove(self, _func) -> None:
+        pass
+
+
+class ExtraStoredData:
+    """Stand-in for homeassistant.helpers.restore_state.ExtraStoredData."""
+
+
+class _RestoreEntity(_Entity):
+    """Stand-in for homeassistant.helpers.restore_state.RestoreEntity."""
+
+    _stub_last_state = None
+    _stub_last_extra_data = None
+
+    async def async_get_last_state(self):
+        return self._stub_last_state
+
+    async def async_get_last_extra_data(self):
+        return self._stub_last_extra_data
+
+
+class _NumberEntity(_Entity):
+    """Stand-in for homeassistant.components.number.NumberEntity."""
+
+
+class _RestoreNumber(_NumberEntity, _RestoreEntity):
+    """Stand-in for homeassistant.components.number.RestoreNumber."""
+
+    _stub_last_number_data = None
+
+    async def async_get_last_number_data(self):
+        return self._stub_last_number_data
+
+
+class _SwitchEntity(_Entity):
+    """Stand-in for homeassistant.components.switch.SwitchEntity."""
+
+
+class _SelectEntity(_Entity):
+    """Stand-in for homeassistant.components.select.SelectEntity."""
+
+
+class _LockEntity(_Entity):
+    """Stand-in for homeassistant.components.lock.LockEntity."""
+
 
 # ---------------------------------------------------------------------------
 # homeassistant.components.bluetooth.match stub
@@ -93,6 +164,23 @@ _ha_const.Platform = MagicMock()
 
 _ha_exc = MagicMock()
 _ha_exc.ConfigEntryNotReady = Exception
+
+_ha_restore_state = MagicMock()
+_ha_restore_state.RestoreEntity = _RestoreEntity
+_ha_restore_state.ExtraStoredData = ExtraStoredData
+
+_ha_number = MagicMock()
+_ha_number.NumberEntity = _NumberEntity
+_ha_number.RestoreNumber = _RestoreNumber
+
+_ha_switch = MagicMock()
+_ha_switch.SwitchEntity = _SwitchEntity
+
+_ha_select = MagicMock()
+_ha_select.SelectEntity = _SelectEntity
+
+_ha_lock = MagicMock()
+_ha_lock.LockEntity = _LockEntity
 
 
 # BleakNotFoundError must be a distinct class (not OSError) so that
@@ -139,7 +227,7 @@ sys.modules.update(
         "homeassistant.helpers.update_coordinator": _ha_udc,
         "homeassistant.helpers.entity": MagicMock(),
         "homeassistant.helpers.entity_platform": MagicMock(),
-        "homeassistant.helpers.restore_state": MagicMock(),
+        "homeassistant.helpers.restore_state": _ha_restore_state,
         "homeassistant.helpers.dispatcher": MagicMock(),
         "homeassistant.helpers.device_registry": MagicMock(),
         # components — top-level and deep submodules
@@ -148,11 +236,12 @@ sys.modules.update(
         "homeassistant.components.bluetooth.match": _ha_bluetooth_match,
         "homeassistant.components.sensor": MagicMock(),
         "homeassistant.components.binary_sensor": MagicMock(),
-        "homeassistant.components.lock": MagicMock(),
+        "homeassistant.components.lock": _ha_lock,
         "homeassistant.components.button": MagicMock(),
-        "homeassistant.components.switch": MagicMock(),
-        "homeassistant.components.select": MagicMock(),
-        "homeassistant.components.number": MagicMock(),
+        "homeassistant.components.switch": _ha_switch,
+        "homeassistant.components.select": _ha_select,
+        "homeassistant.components.number": _ha_number,
+        "homeassistant.components.number.const": MagicMock(),
         "homeassistant.components.persistent_notification": MagicMock(),
         # home_assistant_bluetooth — separate PyPI package
         "home_assistant_bluetooth": MagicMock(),

@@ -9,7 +9,6 @@ from homeassistant.components.binary_sensor import (
     BinarySensorEntity,
     BinarySensorEntityDescription,
 )
-from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.event import async_track_state_change_event
@@ -17,7 +16,8 @@ from homeassistant.helpers.dispatcher import async_dispatcher_send
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
 from homeassistant.const import STATE_ON
 
-from .const import DOMAIN, CONF_DOOR_SENSOR
+from . import GimdowBLEConfigEntry
+from .const import CONF_DOOR_SENSOR
 from .devices import GimdowBLEData, GimdowBLEEntity, GimdowBLEProductInfo
 from .gimdow_ble import GimdowBLEDevice
 
@@ -99,11 +99,11 @@ class GimdowBLEBinarySensor(GimdowBLEEntity, BinarySensorEntity):
 
 async def async_setup_entry(
     hass: HomeAssistant,
-    entry: ConfigEntry,
+    entry: GimdowBLEConfigEntry,
     async_add_entities: AddEntitiesCallback,
 ) -> None:
     """Set up the Gimdow BLE binary sensors."""
-    data: GimdowBLEData = hass.data[DOMAIN][entry.entry_id]
+    data = entry.runtime_data
 
     door_sensor = entry.options.get(CONF_DOOR_SENSOR)
 

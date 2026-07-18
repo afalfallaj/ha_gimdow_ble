@@ -13,7 +13,6 @@ from homeassistant.components.sensor import (
     SensorEntityDescription,
     SensorStateClass,
 )
-from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import (
     SIGNAL_STRENGTH_DECIBELS_MILLIWATT,
 )
@@ -23,16 +22,15 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
 from homeassistant.helpers.restore_state import RestoreEntity
 
+from . import GimdowBLEConfigEntry
 from .const import (
     BATTERY_STATE_HIGH,
     BATTERY_STATE_LOW,
     BATTERY_STATE_NORMAL,
     BATTERY_STATE_POWEROFF,
-    DOMAIN,
 )
 from .devices import (
     GimdowBLECategoryMapping,
-    GimdowBLEData,
     GimdowBLEEntity,
     GimdowBLEProductInfo,
     get_platform_mapping,
@@ -180,11 +178,11 @@ class GimdowBLESensor(GimdowBLEEntity, SensorEntity, RestoreEntity):
 
 async def async_setup_entry(
     hass: HomeAssistant,
-    entry: ConfigEntry,
+    entry: GimdowBLEConfigEntry,
     async_add_entities: AddEntitiesCallback,
 ) -> None:
     """Set up the Gimdow BLE sensors."""
-    data: GimdowBLEData = hass.data[DOMAIN][entry.entry_id]
+    data = entry.runtime_data
     mappings = get_mapping_by_device(data.device)
     entities: list[GimdowBLESensor] = [
         GimdowBLESensor(

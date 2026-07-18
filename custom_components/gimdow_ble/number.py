@@ -9,19 +9,17 @@ from typing import Callable
 
 from homeassistant.components.number import (
     NumberEntityDescription,
-    NumberEntity,
+    RestoreNumber,
 )
 from homeassistant.components.number.const import NumberDeviceClass, NumberMode
-from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import UnitOfTime
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.entity import EntityCategory
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
-from homeassistant.helpers.restore_state import RestoreEntity
 from homeassistant.helpers.dispatcher import async_dispatcher_send
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
 
-from .const import DOMAIN
+from . import GimdowBLEConfigEntry
 from .devices import (
     GimdowBLECategoryMapping,
     GimdowBLEData,
@@ -91,7 +89,7 @@ def get_mapping_by_device(device: GimdowBLEDevice) -> list[GimdowBLENumberMappin
     return get_platform_mapping(mapping, device)
 
 
-class GimdowBLENumber(GimdowBLEEntity, NumberEntity, RestoreEntity):
+class GimdowBLENumber(GimdowBLEEntity, RestoreNumber):
     """Representation of a Gimdow BLE Number."""
 
     def __init__(
@@ -112,21 +110,23 @@ class GimdowBLENumber(GimdowBLEEntity, NumberEntity, RestoreEntity):
         await super().async_added_to_hass()
 
         if self._product.is_lock:
-            if (last_state := await self.async_get_last_state()) is not None:
-                if last_state.state != "unknown":
-                    try:
-                        value = float(last_state.state)
-                        # Calculate raw value based on coefficient to store in device cache
-                        # The property logic divides by coefficient, so we multiply here.
-                        raw_value = int(value * self._mapping.coefficient)
+            # Restore via extra_restore_state_data (native_value), not the
+            # stringified .state — an entity that was unavailable when HA
+            # stopped (e.g. a sleeping BLE lock past its disconnect grace
+            # period) dumps state="unavailable", which float()-parsing would
+            # silently discard. extra_restore_state_data is captured
+            # independently of availability, so it survives that case.
+            if (last_data := await self.async_get_last_number_data()) is not None:
+                if last_data.native_value is not None:
+                    # Calculate raw value based on coefficient to store in device cache
+                    # The property logic divides by coefficient, so we multiply here.
+                    raw_value = int(last_data.native_value * self._mapping.coefficient)
 
-                        self._device.datapoints.get_or_create(
-                            self._mapping.dp_id,
-                            GimdowBLEDataPointType.DT_VALUE,
-                            raw_value,
-                        )
-                    except ValueError:
-                        pass
+                    self._device.datapoints.get_or_create(
+                        self._mapping.dp_id,
+                        GimdowBLEDataPointType.DT_VALUE,
+                        raw_value,
+                    )
 
     @property
     def native_value(self) -> float | None:
@@ -168,11 +168,11 @@ class GimdowBLENumber(GimdowBLEEntity, NumberEntity, RestoreEntity):
 
 async def async_setup_entry(
     hass: HomeAssistant,
-    entry: ConfigEntry,
+    entry: GimdowBLEConfigEntry,
     async_add_entities: AddEntitiesCallback,
 ) -> None:
     """Set up the Gimdow BLE sensors."""
-    data: GimdowBLEData = hass.data[DOMAIN][entry.entry_id]
+    data = entry.runtime_data
     mappings = get_mapping_by_device(data.device)
     entities: list[GimdowBLENumber] = []
     for mapping in mappings:
