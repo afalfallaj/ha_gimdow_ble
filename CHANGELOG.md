@@ -6,14 +6,22 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
-## [4.0.0-beta.1](https://github.com/afalfallaj/ha_gimdow_ble/compare/v4.0.0-beta.0...v4.0.0-beta.1) (2026-07-18)
-
 
 ### ### Features
 
 * update Tuya integration documentation links and add placeholders for dynamic URLs ([e3b2e18](https://github.com/afalfallaj/ha_gimdow_ble/commit/e3b2e187b7a15e402f37f95bb0d2e180657537b8))
 
-## [4.0.0-beta.0](https://github.com/afalfallaj/ha_gimdow_ble/compare/v3.1.0...v4.0.0-beta.0) (2026-07-18)
+## [4.0.0](https://github.com/afalfallaj/ha_gimdow_ble/compare/v3.1.0...v4.0.0-beta.0) (2026-07-18)
+* sync dev manifest after stable release and update documentation ([98c4329](https://github.com/afalfallaj/ha_gimdow_ble/commit/98c4329e256f61ca2e6f8f9408f68fa7ac3dbdef))
+
+
+### ### Bug Fixes
+
+* improve logging for missing packets and handle known ESPHome proxy drop ([56d3b7f](https://github.com/afalfallaj/ha_gimdow_ble/commit/56d3b7f629ae2720946e029242221b21b0b71e50))
+* improve logging for missing packets and handle known ESPHome proxy drop ([bcc1ece](https://github.com/afalfallaj/ha_gimdow_ble/commit/bcc1ece57ef3e60f7ada6c4f4caf45482bd91689))
+* schedule update on packet loss ([a493674](https://github.com/afalfallaj/ha_gimdow_ble/commit/a49367447549fdb3269e624454a9538899a7d578))
+
+## [3.0.0](https://github.com/afalfallaj/ha_gimdow_ble/compare/v2.0.5...v3.0.0) (2026-05-18)
 
 
 ### ⚠ BREAKING CHANGES
@@ -62,6 +70,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 * Rename configuration select entity to special function and remove its explicit value mapping. ([7e22ece](https://github.com/afalfallaj/ha_gimdow_ble/commit/7e22ecec2cbc1e35477c51df7ffdc08441704101))
 * rename Gimdow BLE component references for clarity. ([585dbbd](https://github.com/afalfallaj/ha_gimdow_ble/commit/585dbbdc57a76754d08469aac8177a4b9da38270))
 * Rewrite unknown lock state resolution with a force unlock sequence and `is_locking` property. ([ea6b307](https://github.com/afalfallaj/ha_gimdow_ble/commit/ea6b307fe42c59b979bc0b6bf22f7ef143a2fb12))
+* add auto-merge step for pre-release PRs in release workflow ([6e0d03c](https://github.com/afalfallaj/ha_gimdow_ble/commit/6e0d03cb6c0d24c4ed57bda8700ee28bd29fb077))
+* add tracking for last good sequence number and code name in protocol ([7f8ff12](https://github.com/afalfallaj/ha_gimdow_ble/commit/7f8ff12a8bae4e5caec697ba69c17fbe7afe6978))
+* enhance double command logic to support forced two attempts for locking/unlocking ([2c7ac66](https://github.com/afalfallaj/ha_gimdow_ble/commit/2c7ac6620936a04f265e1f6dc65c2cbd03f553e2))
+* overhaul integration improvements, add test suite, and migrate CI to release-please ([6f5f88e](https://github.com/afalfallaj/ha_gimdow_ble/commit/6f5f88eaa9257dd6d1bbfc80f7065cbaa7140a5a))
+* overhaul integration improvements, add test suite, and migrate CI to release-please ([#27](https://github.com/afalfallaj/ha_gimdow_ble/issues/27)) ([45e88fa](https://github.com/afalfallaj/ha_gimdow_ble/commit/45e88fa233e2079a7f030472cac9edc524191da3))
 * sync dev manifest after stable release and update documentation ([98c4329](https://github.com/afalfallaj/ha_gimdow_ble/commit/98c4329e256f61ca2e6f8f9408f68fa7ac3dbdef))
 
 
@@ -98,6 +111,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 * schedule update on packet loss ([a493674](https://github.com/afalfallaj/ha_gimdow_ble/commit/a49367447549fdb3269e624454a9538899a7d578))
 * specify repository in auto-merge command for pre-release PRs ([17d341f](https://github.com/afalfallaj/ha_gimdow_ble/commit/17d341f224665a2884d70f9b4a9008cd4a79b65e))
 * Tolerate device info request failures by logging a warning and continuing connection instead of terminating. ([c5d085b](https://github.com/afalfallaj/ha_gimdow_ble/commit/c5d085b3092260330b58f0c847bbdd9fa7a9a27a))
+* correct JSON parsing for auto-merge pre-release PR step ([350579d](https://github.com/afalfallaj/ha_gimdow_ble/commit/350579d7cc52dceb3b78f1b3ae06e84e398cded8))
+* improve logging for missing packets and handle known ESPHome proxy drop ([56d3b7f](https://github.com/afalfallaj/ha_gimdow_ble/commit/56d3b7f629ae2720946e029242221b21b0b71e50))
+* improve logging for missing packets and handle known ESPHome proxy drop ([bcc1ece](https://github.com/afalfallaj/ha_gimdow_ble/commit/bcc1ece57ef3e60f7ada6c4f4caf45482bd91689))
+* schedule update on packet loss ([a493674](https://github.com/afalfallaj/ha_gimdow_ble/commit/a49367447549fdb3269e624454a9538899a7d578))
+* specify repository in auto-merge command for pre-release PRs ([17d341f](https://github.com/afalfallaj/ha_gimdow_ble/commit/17d341f224665a2884d70f9b4a9008cd4a79b65e))
 * update release manifest files for versioning consistency ([e47410c](https://github.com/afalfallaj/ha_gimdow_ble/commit/e47410c7e4e41e97473edfe3d601ba61530e8c5f))
 
 
@@ -124,6 +142,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 ### ### Documentation
 
 * Remove `changes.md` release notes document. ([7c22158](https://github.com/afalfallaj/ha_gimdow_ble/commit/7c22158ef071ac8c1cf69719b79f68ded41c6ad7))
+* replace AES with cryptography library for encryption and decryption ([d87e98b](https://github.com/afalfallaj/ha_gimdow_ble/commit/d87e98bc9d3a39ac4eb01cfb4137ec5c26e8388f))
+* simplify double command logic to always send two commands for lock state changes ([a3dad8f](https://github.com/afalfallaj/ha_gimdow_ble/commit/a3dad8fccca285ec3c3d7deaa93c64762f46553e))
 
 ## [3.0.0-beta.8](https://github.com/afalfallaj/ha_gimdow_ble/compare/v3.0.0-beta.7...v3.0.0-beta.8) (2026-05-18)
 
