@@ -11,7 +11,6 @@ from homeassistant.components.switch import (
     SwitchEntityDescription,
     SwitchEntity,
 )
-from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity import EntityCategory
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
@@ -20,7 +19,8 @@ from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
 from homeassistant.helpers.restore_state import ExtraStoredData, RestoreEntity
 from homeassistant.helpers.dispatcher import async_dispatcher_send
 
-from .const import DOMAIN, CONF_DOOR_SENSOR
+from . import GimdowBLEConfigEntry
+from .const import CONF_DOOR_SENSOR
 from .devices import (
     GimdowBLECategoryMapping,
     GimdowBLEData,
@@ -252,11 +252,11 @@ class GimdowBLEVirtualAutoLockSwitch(GimdowBLEEntity, SwitchEntity, RestoreEntit
 
 async def async_setup_entry(
     hass: HomeAssistant,
-    entry: ConfigEntry,
+    entry: GimdowBLEConfigEntry,
     async_add_entities: AddEntitiesCallback,
 ) -> None:
     """Set up the Gimdow BLE switches."""
-    data: GimdowBLEData = hass.data[DOMAIN][entry.entry_id]
+    data = entry.runtime_data
     door_sensor = entry.options.get(CONF_DOOR_SENSOR)
     mappings = get_mapping_by_device(data.device)
     entities: list[GimdowBLESwitch | GimdowBLEVirtualAutoLockSwitch] = []

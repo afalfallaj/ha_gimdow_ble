@@ -528,11 +528,7 @@ class GimdowBLEConfigFlow(ConfigFlow, domain=DOMAIN):
 
             if data:
                 # Update the existing entry
-                entry = self.hass.config_entries.async_get_entry(
-                    self.context["entry_id"]
-                )
-                if entry is None:
-                    return self.async_abort(reason="unknown_entry")
+                entry = self._get_reauth_entry()
                 creds = {k: v for k, v in data.items() if k not in OPTIONS_ONLY_KEYS}
                 self.hass.config_entries.async_update_entry(
                     entry,

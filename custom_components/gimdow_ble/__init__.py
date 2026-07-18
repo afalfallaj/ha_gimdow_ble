@@ -22,7 +22,6 @@ from .const import (
     CONF_AUTO_LOCK_DELAY_FALLBACK,
     CONF_DOOR_SENSOR,
     DEFAULT_AUTO_LOCK_DELAY_FALLBACK,
-    DOMAIN,
     CONF_UNKNOWN_STATE_ACTION,
     CONF_TRANSITION_TIMEOUT,
     OPTIONS_ONLY_KEYS,
@@ -30,6 +29,8 @@ from .const import (
     UNKNOWN_STATE_ACTION_CONFIRM_LAST,
 )
 from .devices import GimdowBLECoordinator, GimdowBLEData, get_device_product_info
+
+type GimdowBLEConfigEntry = ConfigEntry[GimdowBLEData]
 
 PLATFORMS: list[Platform] = [
     Platform.BUTTON,
@@ -44,7 +45,7 @@ PLATFORMS: list[Platform] = [
 _LOGGER = logging.getLogger(__name__)
 
 
-async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
+async def async_setup_entry(hass: HomeAssistant, entry: GimdowBLEConfigEntry) -> bool:
     """Set up Gimdow BLE from a config entry."""
     address: str = entry.data[CONF_ADDRESS]
     ble_device = bluetooth.async_ble_device_from_address(
@@ -107,7 +108,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             )
         ),
     )
-    hass.data.setdefault(DOMAIN, {})[entry.entry_id] = data
+    entry.runtime_data = data
 
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
 
@@ -133,10 +134,10 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     return True
 
 
-async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
+async def async_unload_entry(hass: HomeAssistant, entry: GimdowBLEConfigEntry) -> bool:
     """Unload a config entry."""
     if unload_ok := await hass.config_entries.async_unload_platforms(entry, PLATFORMS):
-        data: GimdowBLEData = hass.data[DOMAIN].pop(entry.entry_id)
+        data = entry.runtime_data
         data.coordinator.stop()
         await data.device.stop()
 

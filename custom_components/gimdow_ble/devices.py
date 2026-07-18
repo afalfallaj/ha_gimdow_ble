@@ -57,7 +57,7 @@ class GimdowBLEProductInfo:
     is_lock: bool = False
 
 
-class GimdowBLEEntity(CoordinatorEntity):
+class GimdowBLEEntity(CoordinatorEntity["GimdowBLECoordinator"]):
     """Gimdow BLE base entity."""
 
     def __init__(
@@ -301,7 +301,8 @@ def get_device_info(device: GimdowBLEDevice) -> DeviceInfo | None:
         manufacturer=(
             product_info.manufacturer if product_info else DEVICE_DEF_MANUFACTURER
         ),
-        model=f"{device.product_model or product_name} ({device.product_id})",
+        model=device.product_model or product_name,
+        model_id=device.product_id,
         name=f"{product_name} {get_short_address(device.address)}",
         sw_version=f"{device.device_version} (protocol {device.protocol_version})",
     )

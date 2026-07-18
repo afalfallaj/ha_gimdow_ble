@@ -58,6 +58,9 @@ class _CoordinatorEntity:
     def __init__(self, coordinator):
         pass
 
+    def __class_getitem__(cls, item):
+        return cls
+
 
 # ---------------------------------------------------------------------------
 # Entity / RestoreEntity / RestoreNumber / ExtraStoredData stubs

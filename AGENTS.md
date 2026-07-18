@@ -111,8 +111,11 @@ These findings are confirmed by hardware test results (`test-res.txt`).
 | File | Purpose |
 |---|---|
 | `.github/workflows/release-please.yml` | Runs release-please on push to `main` or `dev` |
+| `.github/workflows/validate.yml` | Runs `hassfest` and HACS validation (`hacs/action`) on push, PR, a daily schedule, and manual dispatch |
 | `.github/release-please-config.json` | Stable release config (main) |
 | `.github/release-please-config-dev.json` | Pre-release config (dev): `versioning: prerelease`, `prerelease-type: beta.0` |
 | `.release-please-manifest.json` | Tracks last **stable** version released from `main` — do not commit beta version strings here |
 | `.release-please-manifest-dev.json` | Tracks last **beta** version released from `dev` — managed entirely by release-please on dev |
 | `CHANGELOG.md` | Auto-updated by release-please (`changelog-path`) — do not edit manually |
+
+`hacs.json`'s `"homeassistant"` minimum-version floor is **manually maintained** — release-please and the CI workflows above never touch it. Bump it whenever a change starts relying on a newer HA API (e.g. it was raised to `2025.8.0` because `config_flow.py` uses `OptionsFlowWithReload`, added in that HA release). A stale floor doesn't fail CI; it just lets HACS install the integration onto HA versions where an import silently breaks.

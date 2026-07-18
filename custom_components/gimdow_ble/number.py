@@ -12,7 +12,6 @@ from homeassistant.components.number import (
     RestoreNumber,
 )
 from homeassistant.components.number.const import NumberDeviceClass, NumberMode
-from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import UnitOfTime
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.entity import EntityCategory
@@ -20,7 +19,7 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.dispatcher import async_dispatcher_send
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
 
-from .const import DOMAIN
+from . import GimdowBLEConfigEntry
 from .devices import (
     GimdowBLECategoryMapping,
     GimdowBLEData,
@@ -169,11 +168,11 @@ class GimdowBLENumber(GimdowBLEEntity, RestoreNumber):
 
 async def async_setup_entry(
     hass: HomeAssistant,
-    entry: ConfigEntry,
+    entry: GimdowBLEConfigEntry,
     async_add_entities: AddEntitiesCallback,
 ) -> None:
     """Set up the Gimdow BLE sensors."""
-    data: GimdowBLEData = hass.data[DOMAIN][entry.entry_id]
+    data = entry.runtime_data
     mappings = get_mapping_by_device(data.device)
     entities: list[GimdowBLENumber] = []
     for mapping in mappings:

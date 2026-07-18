@@ -11,16 +11,14 @@ from homeassistant.components.button import (
     ButtonEntityDescription,
     ButtonEntity,
 )
-from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.entity import EntityCategory
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
 
-from .const import DOMAIN
+from . import GimdowBLEConfigEntry
 from .devices import (
     GimdowBLECategoryMapping,
-    GimdowBLEData,
     GimdowBLEEntity,
     GimdowBLEProductInfo,
     get_platform_mapping,
@@ -152,11 +150,11 @@ class GimdowBLEButton(GimdowBLEEntity, ButtonEntity):
 
 async def async_setup_entry(
     hass: HomeAssistant,
-    entry: ConfigEntry,
+    entry: GimdowBLEConfigEntry,
     async_add_entities: AddEntitiesCallback,
 ) -> None:
     """Set up the Gimdow BLE sensors."""
-    data: GimdowBLEData = hass.data[DOMAIN][entry.entry_id]
+    data = entry.runtime_data
     mappings = get_mapping_by_device(data.device)
     entities: list[GimdowBLEButton] = []
     for mapping in mappings:

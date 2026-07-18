@@ -16,13 +16,12 @@ import logging
 from dataclasses import dataclass
 
 from homeassistant.components.lock import LockEntity, LockEntityDescription
-from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.dispatcher import async_dispatcher_connect
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
 
-from .const import DOMAIN
+from . import GimdowBLEConfigEntry
 from .devices import (
     GimdowBLECategoryMapping,
     GimdowBLEData,
@@ -305,11 +304,11 @@ class GimdowBLELock(GimdowBLEEntity, LockEntity):
 
 async def async_setup_entry(
     hass: HomeAssistant,
-    entry: ConfigEntry,
+    entry: GimdowBLEConfigEntry,
     async_add_entities: AddEntitiesCallback,
 ) -> None:
     """Set up Gimdow BLE lock entities from a config entry."""
-    data: GimdowBLEData = hass.data[DOMAIN][entry.entry_id]
+    data = entry.runtime_data
     mappings = get_mapping_by_device(data.device)
     entities: list[GimdowBLELock] = []
     for m in mappings:
