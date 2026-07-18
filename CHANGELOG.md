@@ -11,6 +11,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 * update Tuya integration documentation links and add placeholders for dynamic URLs ([e3b2e18](https://github.com/afalfallaj/ha_gimdow_ble/commit/e3b2e187b7a15e402f37f95bb0d2e180657537b8))
 
+## [3.2.0](https://github.com/afalfallaj/ha_gimdow_ble/compare/v3.1.0...v3.2.0) (2026-07-18)
+
+
+### ### Features
+
+* add validation workflow and update integration components for Gimdow BLE ([a7df25c](https://github.com/afalfallaj/ha_gimdow_ble/commit/a7df25c64eda4e8bd1014779397f863ba3a33f2d))
+* enhance restore functionality for entities ([9f5e8bb](https://github.com/afalfallaj/ha_gimdow_ble/commit/9f5e8bb9a6ac20c8f32c017fd63edc3538b7de24))
+* update Tuya integration documentation links and add placeholders for dynamic URLs ([e3b2e18](https://github.com/afalfallaj/ha_gimdow_ble/commit/e3b2e187b7a15e402f37f95bb0d2e180657537b8))
+
 ## [4.0.0](https://github.com/afalfallaj/ha_gimdow_ble/compare/v3.1.0...v4.0.0-beta.0) (2026-07-18)
 * sync dev manifest after stable release and update documentation ([98c4329](https://github.com/afalfallaj/ha_gimdow_ble/commit/98c4329e256f61ca2e6f8f9408f68fa7ac3dbdef))
 
