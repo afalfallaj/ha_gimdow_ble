@@ -172,6 +172,9 @@ def _show_login_form(
         vol.Required(CONF_PASSWORD, default=user_input.get(CONF_PASSWORD, "")): str,
     }
 
+    placeholders.setdefault(
+        "tuya_docs_url", "https://www.home-assistant.io/integrations/tuya/"
+    )
     return flow.async_show_form(
         step_id=step_id,
         data_schema=vol.Schema(schema),
