@@ -17,7 +17,7 @@ from homeassistant.helpers.entity import EntityCategory
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.core import callback
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
-from homeassistant.helpers.restore_state import RestoreEntity
+from homeassistant.helpers.restore_state import ExtraStoredData, RestoreEntity
 from homeassistant.helpers.dispatcher import async_dispatcher_send
 
 from .const import DOMAIN, CONF_DOOR_SENSOR
@@ -132,6 +132,29 @@ class GimdowBLESwitch(GimdowBLEEntity, SwitchEntity):
 # ---------------------------------------------------------------------------
 
 
+@dataclass
+class _VirtualAutoLockExtraData(ExtraStoredData):
+    """Persisted independently of entity availability.
+
+    This switch's state lives only in HA (never on the device), but its
+    availability still follows BLE connectivity. A lock that's disconnected
+    (past its grace period) when HA stops would dump state="unavailable" —
+    parsing plain .state on restore would silently discard it.
+    """
+
+    is_on: bool
+
+    def as_dict(self) -> dict[str, Any]:
+        return {"is_on": self.is_on}
+
+    @classmethod
+    def from_dict(cls, restored: dict[str, Any]) -> _VirtualAutoLockExtraData | None:
+        try:
+            return cls(bool(restored["is_on"]))
+        except KeyError:
+            return None
+
+
 class GimdowBLEVirtualAutoLockSwitch(GimdowBLEEntity, SwitchEntity, RestoreEntity):
     """Auto-lock switch whose on/off state lives in HA, not the device.
 
@@ -154,14 +177,18 @@ class GimdowBLEVirtualAutoLockSwitch(GimdowBLEEntity, SwitchEntity, RestoreEntit
         # Tracks the last device-pushed DP33 value to detect power-cycle resets.
         self._last_dp33: bool | None = None
 
+    @property
+    def extra_restore_state_data(self) -> _VirtualAutoLockExtraData:
+        return _VirtualAutoLockExtraData(self.is_on)
+
     async def async_added_to_hass(self) -> None:
         await super().async_added_to_hass()
 
         if self._product.is_lock:
-            if (last_state := await self.async_get_last_state()) is not None:
-                if last_state.state in ("on", "off"):
-                    is_on = last_state.state == "on"
-                    self._data.virtual_auto_lock = is_on
+            if (last_extra := await self.async_get_last_extra_data()) is not None:
+                restored = _VirtualAutoLockExtraData.from_dict(last_extra.as_dict())
+                if restored is not None:
+                    self._data.virtual_auto_lock = restored.is_on
                     async_dispatcher_send(
                         self.hass, self._data.virtual_auto_lock_signal
                     )

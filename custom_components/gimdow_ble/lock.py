@@ -20,7 +20,6 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.dispatcher import async_dispatcher_connect
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
-from homeassistant.helpers.restore_state import RestoreEntity
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
 
 from .const import DOMAIN
@@ -90,7 +89,7 @@ def get_mapping_by_device(device: GimdowBLEDevice) -> list[GimdowBLELockMapping]
 # ---------------------------------------------------------------------------
 
 
-class GimdowBLELock(GimdowBLEEntity, LockEntity, RestoreEntity):
+class GimdowBLELock(GimdowBLEEntity, LockEntity):
     """Representation of a Gimdow BLE Lock.
 
     This class is a thin HA delegate. All state machine logic,
@@ -145,11 +144,18 @@ class GimdowBLELock(GimdowBLEEntity, LockEntity, RestoreEntity):
     async def async_added_to_hass(self) -> None:
         await super().async_added_to_hass()
 
-        if (last_state := await self.async_get_last_state()) is not None:
-            if last_state.state == "locked":
-                self._lock_manager.restore_last_known_state(True)
-            elif last_state.state == "unlocked":
-                self._lock_manager.restore_last_known_state(False)
+        # Deliberately no HA RestoreEntity-based state restore here. The
+        # entity's last displayed "locked"/"unlocked" can go stale across any
+        # HA-down window (the lock can be operated manually while HA is off),
+        # and DP47 is not re-pushed by the device on reconnect (see AGENTS.md)
+        # — so a restored value can't be corroborated by a fresh device read
+        # either. Reasserting it via a double-command would risk overwriting
+        # a legitimate manual operation that happened while HA was down.
+        # _last_known_state is seeded exclusively from live DP47 pushes via
+        # on_coordinator_update(); on a full restart it starts unknown and
+        # confirm_last/force_lock_twice stay unknown until the device reports
+        # a real reading — that unknown-state resolution is what
+        # GimdowBLELockManager.on_connected() (and _handle_unknown_state) own.
 
         self.async_on_remove(
             self._device.register_connected_callback(self._on_ble_reconnected)
