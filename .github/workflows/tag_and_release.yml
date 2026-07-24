@@ -58,7 +58,7 @@ jobs:
           
           if ! git diff --cached --quiet; then
             git commit -m "chore(release): bump dev version to ${{ steps.calc_tag.outputs.new_tag }} [skip ci]"
-            git push origin dev
+            git push origin HEAD:dev
           fi
 
       # Step 4: Create and push the dev tag
@@ -155,7 +155,7 @@ jobs:
           
           if ! git diff --cached --quiet; then
             git commit -m "chore(release): bump version to ${{ steps.calc_tag.outputs.new_tag }} [skip ci]"
-            git push origin main
+            git push origin HEAD:main
           fi
 
       # Step 5: Create and push the main tag
