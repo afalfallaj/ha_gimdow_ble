@@ -11,6 +11,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 * update Tuya integration documentation links and add placeholders for dynamic URLs ([e3b2e18](https://github.com/afalfallaj/ha_gimdow_ble/commit/e3b2e187b7a15e402f37f95bb0d2e180657537b8))
 
+## [3.3.0](https://github.com/afalfallaj/ha_gimdow_ble/compare/v3.2.1...v3.3.0) (2026-07-24)
+
+
+### ### Features
+
+* add medium battery state, simplify beep volume options, and remove config entry refresh timeout ([5708fb3](https://github.com/afalfallaj/ha_gimdow_ble/commit/5708fb3b2e2111966c33a0952b9df1d86f71555e))
+
 ## [3.2.1](https://github.com/afalfallaj/ha_gimdow_ble/compare/v3.2.0...v3.2.1) (2026-07-24)
 
 
