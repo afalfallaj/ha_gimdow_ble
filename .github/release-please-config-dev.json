@@ -12,18 +12,6 @@
     {"type": "test",     "section": "### Tests",       "hidden": true},
     {"type": "ci",       "section": "### CI",          "hidden": true}
   ],
-  "extra-files": [
-    {
-      "type": "json",
-      "path": "custom_components/gimdow_ble/manifest.json",
-      "jsonpath": "$.version"
-    },
-    {
-      "type": "generic",
-      "path": "custom_components/gimdow_ble/gimdow_ble/__init__.py"
-    }
-  ],
-  "changelog-path": "CHANGELOG.md",
   "include-component-in-tag": false,
   "packages": {
     ".": {
