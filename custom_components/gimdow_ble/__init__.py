@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
 
 from bleak_retry_connector import get_device
@@ -48,9 +49,18 @@ _LOGGER = logging.getLogger(__name__)
 async def async_setup_entry(hass: HomeAssistant, entry: GimdowBLEConfigEntry) -> bool:
     """Set up Gimdow BLE from a config entry."""
     address: str = entry.data[CONF_ADDRESS]
-    ble_device = bluetooth.async_ble_device_from_address(
-        hass, address.upper(), True
-    ) or await get_device(address)
+    ble_device = bluetooth.async_ble_device_from_address(hass, address.upper(), True)
+    if not ble_device:
+        try:
+            async with asyncio.timeout(10):
+                ble_device = await get_device(address)
+        except TimeoutError as err:
+            raise ConfigEntryNotReady(
+                f"Timed out discovering BLE device with address {address}"
+            ) from err
+        except Exception as err:
+            _LOGGER.debug("Could not discover BLE device %s: %s", address, err)
+
     if not ble_device:
         raise ConfigEntryNotReady(
             f"Could not find Gimdow BLE device with address {address}"
@@ -62,7 +72,13 @@ async def async_setup_entry(hass: HomeAssistant, entry: GimdowBLEConfigEntry) ->
 
     coordinator = GimdowBLECoordinator(hass, device)
 
-    await coordinator.async_config_entry_first_refresh()
+    try:
+        async with asyncio.timeout(30):
+            await coordinator.async_config_entry_first_refresh()
+    except TimeoutError as err:
+        raise ConfigEntryNotReady(
+            f"Timed out waiting for initial device refresh for {address} — device may be sleeping"
+        ) from err
 
     @callback
     def _async_update_ble(

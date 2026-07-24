@@ -547,16 +547,19 @@ class GimdowBLELockManager:
         if self._resolution_active:
             if user_initiated:
                 _LOGGER.warning(
-                    "[%s] Unknown-state resolution already in progress — user %s command discarded.",
+                    "[%s] Unknown-state resolution already in progress — cancelling previous resolution for user %s command.",
                     self._device.address,
                     "LOCK" if target_lock else "UNLOCK",
                 )
+                if self._resolution_task and not self._resolution_task.done():
+                    self._resolution_task.cancel()
+                    self._resolution_task = None
             else:
                 _LOGGER.debug(
                     "[%s] Unknown-state task already in progress. Ignoring.",
                     self._device.address,
                 )
-            return
+                return
 
         action = self._config.unknown_state_action
 
@@ -619,6 +622,7 @@ class GimdowBLELockManager:
             if self._config.transition_timeout
             else 60.0
         )
+        max_total_time = timeout * 2.0 + (min(timeout, 10.0) if timeout > 0 else 30.0)
 
         self._transition_state = (
             LockTransitionState.LOCKING
@@ -628,45 +632,53 @@ class GimdowBLELockManager:
         self._on_state_change()
 
         try:
-            for attempt in range(1, 3):
-                _LOGGER.debug(
-                    "[%s] double_command: attempt %d of 2 (target=%s).",
-                    self._device.address,
-                    attempt,
-                    "LOCK" if target_lock else "UNLOCK",
-                )
-                echo = await self._device.send_command_wait_state_echo(
-                    dp_id, value, self._config.state_dp_id, timeout=timeout
-                )
-                if echo:
-                    current = self._device.get_lock_state(self._config.state_dp_id)
+            async with asyncio.timeout(max_total_time):
+                for attempt in range(1, 3):
                     _LOGGER.debug(
-                        "[%s] double_command: attempt %d echo received, state=%s (want %s).",
+                        "[%s] double_command: attempt %d of 2 (target=%s).",
                         self._device.address,
                         attempt,
-                        current,
-                        target_lock,
+                        "LOCK" if target_lock else "UNLOCK",
                     )
-                    if attempt == 2:
-                        if not target_lock:
-                            self.start_auto_lock_timer()
-                        return
-                    # Attempt 1 echo received — first motor cycle confirmed.
-                    # Always proceed to attempt 2 regardless of reported state.
-                else:
-                    _LOGGER.debug(
-                        "[%s] double_command: attempt %d — no DP47 echo within %ss.",
-                        self._device.address,
-                        attempt,
-                        timeout,
+                    echo = await self._device.send_command_wait_state_echo(
+                        dp_id, value, self._config.state_dp_id, timeout=timeout
                     )
+                    if echo:
+                        current = self._device.get_lock_state(self._config.state_dp_id)
+                        _LOGGER.debug(
+                            "[%s] double_command: attempt %d echo received, state=%s (want %s).",
+                            self._device.address,
+                            attempt,
+                            current,
+                            target_lock,
+                        )
+                        if attempt == 2:
+                            if not target_lock:
+                                self.start_auto_lock_timer()
+                            return
+                        # Attempt 1 echo received — first motor cycle confirmed.
+                        # Always proceed to attempt 2 regardless of reported state.
+                    else:
+                        _LOGGER.debug(
+                            "[%s] double_command: attempt %d — no DP47 echo within %ss.",
+                            self._device.address,
+                            attempt,
+                            timeout,
+                        )
 
+                _LOGGER.warning(
+                    "[%s] double_command: no DP47 echo after 2 attempts — marking timeout unknown.",
+                    self._device.address,
+                )
+                self._transition_state = LockTransitionState.TIMEOUT_UNKNOWN
+
+        except TimeoutError:
             _LOGGER.warning(
-                "[%s] double_command: no DP47 echo after 2 attempts — marking timeout unknown.",
+                "[%s] double_command overall timeout after %.1fs — marking timeout unknown.",
                 self._device.address,
+                max_total_time,
             )
             self._transition_state = LockTransitionState.TIMEOUT_UNKNOWN
-
         except asyncio.CancelledError:
             _LOGGER.debug("[%s] double_command task cancelled.", self._device.address)
             raise
