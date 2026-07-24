@@ -11,6 +11,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 * update Tuya integration documentation links and add placeholders for dynamic URLs ([e3b2e18](https://github.com/afalfallaj/ha_gimdow_ble/commit/e3b2e187b7a15e402f37f95bb0d2e180657537b8))
 
+## [3.3.2](https://github.com/afalfallaj/ha_gimdow_ble/compare/v3.3.1...v3.3.2) (2026-07-24)
+
+
+### ### Bug Fixes
+
+* update Gimdow lock mapping to use correct datapoint ID and value for unlocking ([d34f12a](https://github.com/afalfallaj/ha_gimdow_ble/commit/d34f12ab680411471bfa53ac36c933cc0feab677))
+
 ## [3.3.1](https://github.com/afalfallaj/ha_gimdow_ble/compare/v3.3.0...v3.3.1) (2026-07-24)
 
 
