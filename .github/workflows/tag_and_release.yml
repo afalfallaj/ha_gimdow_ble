@@ -1,0 +1,177 @@
+name: Tag Generator and HACS Release
+
+on:
+  push:
+    branches: ["main", "dev"]
+    paths-ignore:
+      - '.github/**'
+
+jobs:
+  generate-dev:
+    if: github.ref == 'refs/heads/dev'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: '0'
+
+      # Step 1: Dry run to calculate the pre-release tag name
+      - name: Calculate Dev Tag
+        id: calc_tag
+        uses: anothrNick/github-tag-action@1.71.0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GH_TOKEN || secrets.GITHUB_TOKEN }}
+          DEFAULT_BUMP: patch
+          PRERELEASE: true
+          PRERELEASE_SUFFIX: dev
+          WITH_V: true
+          DRY_RUN: true
+
+      # Step 2: Auto-detect and update manifest.json and __init__.py version
+      - name: Update versions
+        run: |
+          RAW_TAG="${{ steps.calc_tag.outputs.new_tag }}"
+          CLEAN_VERSION="${RAW_TAG#v}"
+          
+          # Update manifest.json
+          MANIFEST_PATH=$(find custom_components -name "manifest.json" | head -n 1)
+          echo "Updating $MANIFEST_PATH to version $CLEAN_VERSION"
+          jq --arg ver "$CLEAN_VERSION" '.version = $ver' "$MANIFEST_PATH" > temp.json && mv temp.json "$MANIFEST_PATH"
+
+          # Update __init__.py
+          INIT_PATH=$(find custom_components -name "__init__.py" | head -n 1)
+          if [ -n "$INIT_PATH" ]; then
+            echo "Updating $INIT_PATH to version $CLEAN_VERSION"
+            sed -i "s/^__version__ = .*/__version__ = \"$CLEAN_VERSION\"/" "$INIT_PATH"
+          fi
+
+      # Step 3: Commit updated files back to dev branch
+      - name: Commit versions
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add custom_components/*/manifest.json
+          git add custom_components/*/*/__init__.py
+          
+          if ! git diff --cached --quiet; then
+            git commit -m "chore(release): bump dev version to ${{ steps.calc_tag.outputs.new_tag }} [skip ci]"
+            git push origin dev
+          fi
+
+      # Step 4: Create and push the dev tag
+      - name: Push Dev Tag
+        id: push_tag
+        uses: anothrNick/github-tag-action@1.71.0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GH_TOKEN || secrets.GITHUB_TOKEN }}
+          DEFAULT_BUMP: patch
+          PRERELEASE: true
+          PRERELEASE_SUFFIX: dev
+          WITH_V: true
+
+      # Step 5: Publish GitHub Pre-Release for HACS Beta users
+      - name: Create GitHub Pre-Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.push_tag.outputs.new_tag }}
+          name: ${{ steps.push_tag.outputs.new_tag }}
+          prerelease: true
+          generate_release_notes: true
+
+  generate-main:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: '0'
+
+      # Step 1: Dry run to calculate the production tag name
+      - name: Calculate Main Tag
+        id: calc_tag
+        uses: anothrNick/github-tag-action@1.71.0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GH_TOKEN || secrets.GITHUB_TOKEN }}
+          DEFAULT_BUMP: patch
+          WITH_V: true
+          DRY_RUN: true
+
+      # Step 2: Auto-detect and update manifest.json and __init__.py version
+      - name: Update versions
+        run: |
+          RAW_TAG="${{ steps.calc_tag.outputs.new_tag }}"
+          CLEAN_VERSION="${RAW_TAG#v}"
+          
+          # Update manifest.json
+          MANIFEST_PATH=$(find custom_components -name "manifest.json" | head -n 1)
+          echo "Updating $MANIFEST_PATH to version $CLEAN_VERSION"
+          jq --arg ver "$CLEAN_VERSION" '.version = $ver' "$MANIFEST_PATH" > temp.json && mv temp.json "$MANIFEST_PATH"
+
+          # Update __init__.py
+          INIT_PATH=$(find custom_components -name "__init__.py" | head -n 1)
+          if [ -n "$INIT_PATH" ]; then
+            echo "Updating $INIT_PATH to version $CLEAN_VERSION"
+            sed -i "s/^__version__ = .*/__version__ = \"$CLEAN_VERSION\"/" "$INIT_PATH"
+          fi
+
+      # Step 3: Generate CHANGELOG.md entry from PRs/Commits
+      - name: Update CHANGELOG.md
+        run: |
+          RAW_TAG="${{ steps.calc_tag.outputs.new_tag }}"
+          DATE=$(date +'%Y-%m-%d')
+          
+          # Get git log since last tag
+          PREV_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
+          if [ -z "$PREV_TAG" ]; then
+            LOGS=$(git log --oneline --no-merges)
+          else
+            LOGS=$(git log ${PREV_TAG}..HEAD --oneline --no-merges)
+          fi
+
+          # Prepare temporary changelog block
+          NEW_CHANGELOG="## [$RAW_TAG] - $DATE\n\n$LOGS\n\n"
+          
+          # Prepend to existing CHANGELOG.md (or create if missing)
+          if [ -f CHANGELOG.md ]; then
+            echo -e "$NEW_CHANGELOG$(cat CHANGELOG.md)" > CHANGELOG.md
+          else
+            echo -e "# Changelog\n\n$NEW_CHANGELOG" > CHANGELOG.md
+          fi
+
+      # Step 4: Commit updated files back to main branch
+      - name: Commit versions
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add custom_components/*/manifest.json
+          git add custom_components/*/*/__init__.py
+          git add CHANGELOG.md
+          
+          if ! git diff --cached --quiet; then
+            git commit -m "chore(release): bump version to ${{ steps.calc_tag.outputs.new_tag }} [skip ci]"
+            git push origin main
+          fi
+
+      # Step 5: Create and push the main tag
+      - name: Push Main Tag
+        id: push_tag
+        uses: anothrNick/github-tag-action@1.71.0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GH_TOKEN || secrets.GITHUB_TOKEN }}
+          DEFAULT_BUMP: patch
+          WITH_V: true
+
+      # Step 6: Publish Official GitHub Release for HACS Production
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.push_tag.outputs.new_tag }}
+          name: ${{ steps.push_tag.outputs.new_tag }}
+          prerelease: false
+          generate_release_notes: true
