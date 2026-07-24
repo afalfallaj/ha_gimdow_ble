@@ -552,8 +552,10 @@ class GimdowBLELockManager:
                     "LOCK" if target_lock else "UNLOCK",
                 )
                 if self._resolution_task and not self._resolution_task.done():
-                    self._resolution_task.cancel()
+                    old_task = self._resolution_task
                     self._resolution_task = None
+                    old_task.cancel()
+                    await asyncio.gather(old_task, return_exceptions=True)
             else:
                 _LOGGER.debug(
                     "[%s] Unknown-state task already in progress. Ignoring.",
