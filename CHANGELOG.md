@@ -11,6 +11,22 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 * update Tuya integration documentation links and add placeholders for dynamic URLs ([e3b2e18](https://github.com/afalfallaj/ha_gimdow_ble/commit/e3b2e187b7a15e402f37f95bb0d2e180657537b8))
 
+## [4.0.0-beta.1](https://github.com/afalfallaj/ha_gimdow_ble/compare/v4.0.0-beta.0...v4.0.0-beta.1) (2026-07-24)
+
+
+### ### Features
+
+* add medium battery state, simplify beep volume options, and remove config entry refresh timeout ([5708fb3](https://github.com/afalfallaj/ha_gimdow_ble/commit/5708fb3b2e2111966c33a0952b9df1d86f71555e))
+* update Tuya integration documentation links and add placeholders for dynamic URLs ([e3b2e18](https://github.com/afalfallaj/ha_gimdow_ble/commit/e3b2e187b7a15e402f37f95bb0d2e180657537b8))
+
+
+### ### Bug Fixes
+
+* add overall command timeouts and enable cancellation of redundant resolution tasks ([9a02d36](https://github.com/afalfallaj/ha_gimdow_ble/commit/9a02d3674275387e98d6c04214ff3805ab0ed14d))
+* await cancellation of resolution task to prevent potential race conditions ([69bf35e](https://github.com/afalfallaj/ha_gimdow_ble/commit/69bf35ee52c8256c78763e5da63569f4a83f7568))
+* initialize coordinator in connected state and normalize Bluetooth address casing ([08db794](https://github.com/afalfallaj/ha_gimdow_ble/commit/08db7945ae1cf33797563ddbc4fd232b2faf68d1))
+* update Gimdow lock mapping to use correct datapoint ID and value for unlocking ([d34f12a](https://github.com/afalfallaj/ha_gimdow_ble/commit/d34f12ab680411471bfa53ac36c933cc0feab677))
+
 ## [4.0.0-beta.0](https://github.com/afalfallaj/ha_gimdow_ble/compare/v3.3.1...v4.0.0-beta.0) (2026-07-24)
 
 
