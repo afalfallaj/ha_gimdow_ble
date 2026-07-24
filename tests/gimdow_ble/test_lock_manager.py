@@ -69,10 +69,10 @@ def _make_manager(
         transition_timeout=transition_timeout,
         auto_lock_delay_fallback=30,
         lock_dp_id=46,
-        unlock_dp_id=6,
+        unlock_dp_id=46,
         state_dp_id=47,
         lock_value=True,
-        unlock_value=True,
+        unlock_value=False,
         get_auto_lock=lambda: virtual_auto_lock,
         has_door_sensor=has_door_sensor,
     )
@@ -874,7 +874,7 @@ class TestUnlockNormalPath:
     async def test_unlock_sends_control_datapoint(self) -> None:
         mgr, _, device = _make_manager(is_locked_return=True)
         await mgr.unlock()
-        device.send_control_datapoint.assert_awaited_once_with(6, True)
+        device.send_control_datapoint.assert_awaited_once_with(46, False)
 
     async def test_unlock_sets_action_source_ha(self) -> None:
         mgr, _, device = _make_manager(is_locked_return=True)

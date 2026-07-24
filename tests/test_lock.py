@@ -43,8 +43,10 @@ def _make_device(*, address: str = "AA:BB:CC:DD:EE:FF") -> MagicMock:
 def _make_lock(device: MagicMock) -> tuple[GimdowBLELock, GimdowBLEData]:
     mapping = GimdowBLELockMapping(
         lock_dp_id=46,
-        unlock_dp_id=6,
+        unlock_dp_id=46,
         state_dp_id=47,
+        unlock_value=False,
+        lock_value=True,
         description=SimpleNamespace(key="lock", translation_key=None),
     )
     product = SimpleNamespace(name="A1 PRO MAX", manufacturer="Gimdow", is_lock=True)
