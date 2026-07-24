@@ -965,16 +965,38 @@ class TestLockUnknownState:
         await mgr.lock()
         assert mgr._resolution_task is not None
 
-    async def test_double_action_deduplicates_running_task(self) -> None:
+    async def test_user_command_cancels_running_resolution_task(self) -> None:
         mgr, hass, device = _make_manager(
             is_locked_return=None,
             unknown_state_action=UNKNOWN_STATE_ACTION_DOUBLE_ON_ACTION,
         )
-        device.send_command_wait_state_echo = AsyncMock(return_value=True)
+        async def _slow_echo(*args, **kwargs):
+            await asyncio.sleep(10)
+            return True
+        device.send_command_wait_state_echo = AsyncMock(side_effect=_slow_echo)
         await mgr.lock()
         first_task = mgr._resolution_task
+        assert first_task is not None
         device.get_lock_state.return_value = None
-        await mgr.lock()
+        await mgr.unlock()
+        await asyncio.sleep(0)
+        second_task = mgr._resolution_task
+        assert second_task is not None
+        assert second_task is not first_task
+        assert first_task.cancelled() or first_task.done()
+
+    async def test_non_user_command_deduplicates_running_task(self) -> None:
+        mgr, hass, device = _make_manager(
+            is_locked_return=None,
+            unknown_state_action=UNKNOWN_STATE_ACTION_DOUBLE_ON_ACTION,
+        )
+        async def _slow_echo(*args, **kwargs):
+            await asyncio.sleep(10)
+            return True
+        device.send_command_wait_state_echo = AsyncMock(side_effect=_slow_echo)
+        await mgr._handle_unknown_state(target_lock=True, user_initiated=False)
+        first_task = mgr._resolution_task
+        await mgr._handle_unknown_state(target_lock=True, user_initiated=False)
         assert mgr._resolution_task is first_task
 
     async def test_confirm_last_in_unknown_state_is_ignored(self) -> None:
@@ -994,3 +1016,17 @@ class TestLockUnknownState:
         device.send_command_wait_state_echo = AsyncMock(return_value=True)
         await mgr.unlock()
         assert mgr._resolution_task is not None
+
+    async def test_double_command_overall_timeout(self) -> None:
+        mgr, _, device = _make_manager(
+            is_locked_return=None,
+            transition_timeout=0.01,
+            unknown_state_action=UNKNOWN_STATE_ACTION_DOUBLE_ON_ACTION,
+        )
+        async def _slow_echo(*args, **kwargs):
+            await asyncio.sleep(1)
+            return True
+        device.send_command_wait_state_echo = AsyncMock(side_effect=_slow_echo)
+        await mgr._double_command_to_state(True)
+        assert mgr.is_timeout_unknown is True
+
