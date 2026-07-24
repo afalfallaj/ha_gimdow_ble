@@ -114,13 +114,14 @@ class GimdowBLECoordinator(DataUpdateCoordinator[GimdowBLEDevice]):
             update_interval=None,
         )
         self._device = device
-        self._disconnected: bool = True
+        self._disconnected: bool = False
         self._unsub_disconnect: CALLBACK_TYPE | None = None
         self._unregister_callbacks: list[Callable[[], None]] = [
             device.register_connected_callback(self._async_handle_connect),
             device.register_callback(self._async_handle_update),
             device.register_disconnected_callback(self._async_handle_disconnect),
         ]
+        self._async_handle_disconnect()
 
     @property
     def connected(self) -> bool:
