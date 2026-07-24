@@ -55,6 +55,18 @@ Other Gimdow models that use the Tuya BLE protocol may work but are untested.
 
 - Home Assistant **2024.3** or later.
 - A Bluetooth adapter or [ESPHome Bluetooth proxy](https://esphome.io/components/bluetooth_proxy.html) within range of the lock.
+  - **Important for ESPHome users**: If you are using ESP supports BLE 5.you must force the Bluetooth stack to use BLE 4.2, as the lock hardware may reject BLE 5.0 connections (status 133 / Cmd Disallowed). Add this to your ESPHome YAML:
+    ```yaml
+    esp32:
+      board: esp32-c6-devkitc-1
+      framework:
+        type: esp-idf
+        sdkconfig_options:
+          # Explicitly enable BLE 4.2 support
+          CONFIG_BT_BLE_42_FEATURES_SUPPORTED: "y"
+          # Disable BLE 5.0 features (forces fallback to BLE 4.2 mode)
+          CONFIG_BT_BLE_50_FEATURES_SUPPORTED: "n"
+    ```
 - For automatic setup: a [Tuya IoT Platform](https://iot.tuya.com/) account linked to the app where the lock was registered. See the [official Tuya integration guide](https://www.home-assistant.io/integrations/tuya/) for credential instructions.
 
 ---

@@ -323,7 +323,15 @@ class GimdowBLEConnection:
         except asyncio.CancelledError:
             raise
         except BLEAK_EXCEPTIONS as ex:
-            _LOGGER.error("%s: BLE connection failed: %s", self.address, ex)
+            ex_str = str(ex).lower()
+            if "esp_gatt_conn_conn_cancel" in ex_str or "133" in ex_str or "out of connection slots" in ex_str:
+                _LOGGER.error(
+                    "%s: BLE connection failed (Hardware rejection). Ensure the Tuya app is closed. Ensure BLE 4.2 is enabled. Details: %s",
+                    self.address,
+                    ex,
+                )
+            else:
+                _LOGGER.error("%s: BLE connection failed: %s", self.address, ex)
             return None
         except Exception as ex:
             _LOGGER.error(
