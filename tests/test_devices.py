@@ -204,6 +204,7 @@ class TestCoordinatorCallbackCleanup:
 
     def test_async_handle_disconnect_schedules_delay(self, hass) -> None:
         coord = GimdowBLECoordinator(hass, _make_device())
+        coord._unsub_disconnect = None
         with patch("custom_components.gimdow_ble.devices.async_call_later") as mock_acl:
             mock_acl.return_value = MagicMock()
             coord._async_handle_disconnect()
@@ -212,6 +213,7 @@ class TestCoordinatorCallbackCleanup:
 
     def test_async_handle_disconnect_does_not_double_schedule(self, hass) -> None:
         coord = GimdowBLECoordinator(hass, _make_device())
+        coord._unsub_disconnect = None
         with patch("custom_components.gimdow_ble.devices.async_call_later") as mock_acl:
             mock_acl.return_value = MagicMock()
             coord._async_handle_disconnect()
@@ -227,10 +229,11 @@ class TestCoordinatorCallbackCleanup:
 
 
 class TestReconnectSchedulesDeviceUpdate:
-    def test_initial_disconnected_state_is_true(self, hass) -> None:
+    def test_initial_disconnected_state_is_false_with_grace_timer(self, hass) -> None:
         coordinator = GimdowBLECoordinator(hass, _make_device())
-        assert coordinator._disconnected is True
-        assert coordinator.connected is False
+        assert coordinator._disconnected is False
+        assert coordinator.connected is True
+        assert coordinator._unsub_disconnect is not None
 
     async def test_connected_after_disconnect_calls_update(self, hass) -> None:
         dev = _make_device()

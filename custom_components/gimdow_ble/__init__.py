@@ -72,8 +72,6 @@ async def async_setup_entry(hass: HomeAssistant, entry: GimdowBLEConfigEntry) ->
 
     coordinator = GimdowBLECoordinator(hass, device)
 
-    await coordinator.async_config_entry_first_refresh()
-
     @callback
     def _async_update_ble(
         service_info: bluetooth.BluetoothServiceInfoBleak,
@@ -93,10 +91,12 @@ async def async_setup_entry(hass: HomeAssistant, entry: GimdowBLEConfigEntry) ->
         bluetooth.async_register_callback(
             hass,
             _async_update_ble,
-            BluetoothCallbackMatcher({ADDRESS: address}),
+            BluetoothCallbackMatcher({ADDRESS: address.upper()}),
             bluetooth.BluetoothScanningMode.ACTIVE,
         )
     )
+
+    await coordinator.async_config_entry_first_refresh()
 
     data = GimdowBLEData(
         entry.title,
