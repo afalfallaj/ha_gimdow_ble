@@ -11,6 +11,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 * update Tuya integration documentation links and add placeholders for dynamic URLs ([e3b2e18](https://github.com/afalfallaj/ha_gimdow_ble/commit/e3b2e187b7a15e402f37f95bb0d2e180657537b8))
 
+## [3.3.1](https://github.com/afalfallaj/ha_gimdow_ble/compare/v3.3.0...v3.3.1) (2026-07-24)
+
+
+### ### Bug Fixes
+
+* initialize coordinator in connected state and normalize Bluetooth address casing ([08db794](https://github.com/afalfallaj/ha_gimdow_ble/commit/08db7945ae1cf33797563ddbc4fd232b2faf68d1))
+
 ## [3.3.0](https://github.com/afalfallaj/ha_gimdow_ble/compare/v3.2.1...v3.3.0) (2026-07-24)
 
 
