@@ -52,9 +52,7 @@ mapping: dict[str, GimdowBLECategorySelectMapping] = {
                         key="beep_volume",
                         options=[
                             "mute",
-                            "low",
                             "normal",
-                            "high",
                         ],
                         entity_category=EntityCategory.CONFIG,
                     ),

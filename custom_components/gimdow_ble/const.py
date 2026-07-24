@@ -78,6 +78,7 @@ TUYA_FACTORY_INFO_MAC: Final = "mac"
 
 BATTERY_STATE_LOW: Final = "low"
 BATTERY_STATE_NORMAL: Final = "normal"
+BATTERY_STATE_MEDIUM: Final = "medium"
 BATTERY_STATE_HIGH: Final = "high"
 BATTERY_STATE_POWEROFF: Final = "poweroff"
 

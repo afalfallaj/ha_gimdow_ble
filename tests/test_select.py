@@ -45,7 +45,7 @@ def _make_select(
         description=SimpleNamespace(
             key="beep_volume",
             translation_key=None,
-            options=["mute", "low", "normal", "high"],
+            options=["mute", "normal"],
         ),
         value_mapping=value_mapping,
     )
@@ -76,7 +76,7 @@ class TestSelectRestore:
         await entity.async_added_to_hass()
 
         device.datapoints.get_or_create.assert_called_once_with(
-            31, GimdowBLEDataPointType.DT_ENUM, 2  # "normal" is index 2
+            31, GimdowBLEDataPointType.DT_ENUM, 1  # "normal" is index 1
         )
 
     async def test_restores_option_via_value_mapping(self) -> None:

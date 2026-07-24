@@ -26,6 +26,7 @@ from . import GimdowBLEConfigEntry
 from .const import (
     BATTERY_STATE_HIGH,
     BATTERY_STATE_LOW,
+    BATTERY_STATE_MEDIUM,
     BATTERY_STATE_NORMAL,
     BATTERY_STATE_POWEROFF,
 )
@@ -74,7 +75,7 @@ mapping: dict[str, GimdowBLECategorySensorMapping] = {
                         device_class=SensorDeviceClass.ENUM,
                         options=[
                             BATTERY_STATE_HIGH,
-                            BATTERY_STATE_NORMAL,
+                            BATTERY_STATE_MEDIUM,
                             BATTERY_STATE_LOW,
                             BATTERY_STATE_POWEROFF,
                         ],
