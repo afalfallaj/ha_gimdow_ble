@@ -66,10 +66,10 @@ mapping: dict[str, GimdowBLECategoryLockMapping] = {
             "rlyxv7pe": [  # Gimdow Smart Lock
                 GimdowBLELockMapping(
                     lock_dp_id=46,
-                    unlock_dp_id=46,
+                    unlock_dp_id=6,
                     state_dp_id=47,
                     description=LockEntityDescription(key="lock", name=None),
-                    unlock_value=False,
+                    unlock_value=True,
                     lock_value=True,
                 ),
             ]

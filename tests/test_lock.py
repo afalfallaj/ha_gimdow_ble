@@ -43,9 +43,9 @@ def _make_device(*, address: str = "AA:BB:CC:DD:EE:FF") -> MagicMock:
 def _make_lock(device: MagicMock) -> tuple[GimdowBLELock, GimdowBLEData]:
     mapping = GimdowBLELockMapping(
         lock_dp_id=46,
-        unlock_dp_id=46,
+        unlock_dp_id=6,
         state_dp_id=47,
-        unlock_value=False,
+        unlock_value=True,
         lock_value=True,
         description=SimpleNamespace(key="lock", translation_key=None),
     )
