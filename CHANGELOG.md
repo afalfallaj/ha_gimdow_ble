@@ -11,6 +11,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 * update Tuya integration documentation links and add placeholders for dynamic URLs ([e3b2e18](https://github.com/afalfallaj/ha_gimdow_ble/commit/e3b2e187b7a15e402f37f95bb0d2e180657537b8))
 
+## [3.3.5](https://github.com/afalfallaj/ha_gimdow_ble/compare/v3.3.4...v3.3.5) (2026-07-24)
+
+
+### ### Bug Fixes
+
+* improve error logging for connection failures and document BLE 4.2 requirement for ESPHome compatibility ([1b9f6f6](https://github.com/afalfallaj/ha_gimdow_ble/commit/1b9f6f661331e34dbc172b1978bbdd74bfacad52))
+
 ## [3.3.4](https://github.com/afalfallaj/ha_gimdow_ble/compare/v3.3.3...v3.3.4) (2026-07-24)
 
 
