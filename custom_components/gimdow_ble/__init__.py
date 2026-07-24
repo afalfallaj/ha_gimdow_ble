@@ -72,13 +72,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: GimdowBLEConfigEntry) ->
 
     coordinator = GimdowBLECoordinator(hass, device)
 
-    try:
-        async with asyncio.timeout(30):
-            await coordinator.async_config_entry_first_refresh()
-    except TimeoutError as err:
-        raise ConfigEntryNotReady(
-            f"Timed out waiting for initial device refresh for {address} — device may be sleeping"
-        ) from err
+    await coordinator.async_config_entry_first_refresh()
 
     @callback
     def _async_update_ble(

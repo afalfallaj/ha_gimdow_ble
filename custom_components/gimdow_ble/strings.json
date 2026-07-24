@@ -96,6 +96,7 @@
         "name": "Battery State",
         "state": {
           "high": "High",
+          "medium": "Medium",
           "normal": "Normal",
           "low": "Low",
           "poweroff": "Power off"
