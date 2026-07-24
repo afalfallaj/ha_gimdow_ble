@@ -11,6 +11,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 * update Tuya integration documentation links and add placeholders for dynamic URLs ([e3b2e18](https://github.com/afalfallaj/ha_gimdow_ble/commit/e3b2e187b7a15e402f37f95bb0d2e180657537b8))
 
+## [4.0.0-beta.1](https://github.com/afalfallaj/ha_gimdow_ble/compare/v4.0.0-beta.0...v4.0.0-beta.1) (2026-07-24)
+
+
+### ### Features
+
+* update Tuya integration documentation links and add placeholders for dynamic URLs ([e3b2e18](https://github.com/afalfallaj/ha_gimdow_ble/commit/e3b2e187b7a15e402f37f95bb0d2e180657537b8))
+
+
+### ### Bug Fixes
+
+* add overall command timeouts and enable cancellation of redundant resolution tasks ([9a02d36](https://github.com/afalfallaj/ha_gimdow_ble/commit/9a02d3674275387e98d6c04214ff3805ab0ed14d))
+
 ## [4.0.0-beta.0](https://github.com/afalfallaj/ha_gimdow_ble/compare/v3.2.0...v4.0.0-beta.0) (2026-07-24)
 
 
