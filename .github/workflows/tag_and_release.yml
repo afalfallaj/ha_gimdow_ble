@@ -30,38 +30,7 @@ jobs:
           WITH_V: true
           DRY_RUN: true
 
-      # Step 2: Auto-detect and update manifest.json and __init__.py version
-      - name: Update versions
-        run: |
-          RAW_TAG="${{ steps.calc_tag.outputs.new_tag }}"
-          CLEAN_VERSION="${RAW_TAG#v}"
-          
-          # Update manifest.json
-          MANIFEST_PATH=$(find custom_components -name "manifest.json" | head -n 1)
-          echo "Updating $MANIFEST_PATH to version $CLEAN_VERSION"
-          jq --arg ver "$CLEAN_VERSION" '.version = $ver' "$MANIFEST_PATH" > temp.json && mv temp.json "$MANIFEST_PATH"
-
-          # Update __init__.py
-          INIT_PATH=$(find custom_components -name "__init__.py" | head -n 1)
-          if [ -n "$INIT_PATH" ]; then
-            echo "Updating $INIT_PATH to version $CLEAN_VERSION"
-            sed -i "s/^__version__ = .*/__version__ = \"$CLEAN_VERSION\"/" "$INIT_PATH"
-          fi
-
-      # Step 3: Commit updated files back to dev branch
-      - name: Commit versions
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add custom_components/*/manifest.json
-          git add custom_components/*/*/__init__.py
-          
-          if ! git diff --cached --quiet; then
-            git commit -m "chore(release): bump dev version to ${{ steps.calc_tag.outputs.new_tag }} [skip ci]"
-            git push origin HEAD:dev
-          fi
-
-      # Step 4: Create and push the dev tag
+      # Step 2: Create and push the dev tag
       - name: Push Dev Tag
         id: push_tag
         uses: anothrNick/github-tag-action@1.71.0
@@ -72,7 +41,7 @@ jobs:
           PRERELEASE_SUFFIX: dev
           WITH_V: true
 
-      # Step 5: Publish GitHub Pre-Release for HACS Beta users
+      # Step 3: Publish GitHub Pre-Release for HACS Beta users
       - name: Create GitHub Pre-Release
         uses: softprops/action-gh-release@v2
         with:
