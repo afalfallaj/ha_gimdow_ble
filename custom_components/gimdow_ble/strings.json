@@ -51,6 +51,7 @@
         }
       },
       "user": {
+        "description": "Choose how you want to configure your Gimdow lock",
         "menu_options": {
           "login": "Login via Tuya Cloud",
           "manual": "Manual Entry (Advanced)"

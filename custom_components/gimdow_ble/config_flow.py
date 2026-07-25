@@ -306,7 +306,7 @@ class GimdowBLEConfigFlow(ConfigFlow, domain=DOMAIN):
                 self._manager,
             )
         }
-        return await self.async_step_login()
+        return self.async_show_menu(step_id="user", menu_options=["login", "manual"])
 
     async def async_step_user(
         self, user_input: dict[str, Any] | None = None
