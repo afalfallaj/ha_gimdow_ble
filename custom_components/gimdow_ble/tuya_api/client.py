@@ -64,7 +64,7 @@ class TuyaOpenAPI:
         method: str,
         path: str,
         params: dict[str, Any] | None = None,
-        body: dict[str, Any] | None = None,
+        body_str: str | None = None,
     ) -> tuple[str, int]:
         str_to_sign = method
         str_to_sign += "\n"
