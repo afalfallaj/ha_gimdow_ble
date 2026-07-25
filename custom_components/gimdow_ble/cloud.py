@@ -293,7 +293,7 @@ class HASSGimdowBLEDeviceManager(AbstractGimdowBLEDeviceManager):
                 if cache_key:
                     item = cache.get(cache_key)
 
-            if item is None or force_update:
+            if item is None or len(item.credentials) == 0 or force_update:
                 if self._is_login_success(await self.login(True)):
                     async with self._cloud_lock():
                         item = self._cloud_cache().get(cache_key)
