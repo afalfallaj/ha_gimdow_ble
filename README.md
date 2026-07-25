@@ -1,8 +1,5 @@
 
-# Gimdow A1 Pro Max BLE
-<p align="center">
-  <img src="custom_components/gimdow_ble/brand/logo.png" alt="logo" width="128"/>
-</p>
+# <img src="custom_components/gimdow_ble/brand/logo.png" alt="logo" width="48"/> Gimdow A1 Pro Max BLE
 
 [![HACS][hacs-badge]][hacs-url]
 [![GitHub Release][release-badge]][release-url]
