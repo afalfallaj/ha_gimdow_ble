@@ -7,7 +7,7 @@
 
 **The definitive, standalone Home Assistant integration for the Gimdow A1 Pro Max smart lock.**
 
-Designed from the ground up for stability and speed, this custom component uses a lightweight, native asynchronous client. **100% Local Execution:** The Tuya cloud is ONLY used once during setup to extract your device keys (or completely bypassed using the manual method). After setup, your lock never talks to the internet.
+Designed from the ground up for stability and speed, this custom component uses a lightweight, native asynchronous client. **100% Local Execution:** The Tuya cloud is ONLY used once during setup to extract your device keys (or completely bypassed using the manual method).
 
 ---
 
