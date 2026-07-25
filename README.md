@@ -1,5 +1,5 @@
 
-# <img src="custom_components/gimdow_ble/brand/logo.png" alt="logo" width="48"/> Gimdow A1 Pro Max BLE
+# <img src="https://raw.githubusercontent.com/afalfallaj/ha_gimdow_ble/main/custom_components/gimdow_ble/brand/icon.png" alt="logo" width="64"/> Gimdow A1 Pro Max BLE
 
 [![HACS][hacs-badge]][hacs-url]
 [![GitHub Release][release-badge]][release-url]
