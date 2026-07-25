@@ -22,7 +22,7 @@
         "data": {
           "access_id": "Tuya IoT Access ID",
           "access_secret": "Tuya IoT Access Secret",
-          "country_code": "Country",
+          "region": "Tuya Cloud Region",
           "password": "Tuya Password",
           "username": "Tuya Account"
         },
@@ -45,12 +45,13 @@
         "data": {
           "access_id": "Tuya IoT Access ID",
           "access_secret": "Tuya IoT Access Secret",
-          "country_code": "Country",
+          "region": "Tuya Cloud Region",
           "password": "Tuya Password",
           "username": "Tuya Account"
         }
       },
       "user": {
+        "description": "Choose how you want to configure your Gimdow lock",
         "menu_options": {
           "login": "Login via Tuya Cloud",
           "manual": "Manual Entry (Advanced)"

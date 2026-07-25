@@ -11,7 +11,6 @@ import time
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from struct import pack
-from typing import Any
 
 from ..const import DPType
 from .const import GimdowBLEDataPointType

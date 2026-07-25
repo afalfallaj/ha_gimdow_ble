@@ -6,7 +6,7 @@ import logging
 from typing import Any
 
 import voluptuous as vol
-from tuya_iot import AuthType
+from .tuya_api import AuthType, TUYA_REGIONS
 
 from homeassistant.config_entries import (
     ConfigEntry,
@@ -37,7 +37,7 @@ from homeassistant.helpers.selector import (
 from homeassistant.core import callback
 from homeassistant.data_entry_flow import FlowHandler, FlowResult
 
-from .gimdow_ble import SERVICE_UUID, GimdowBLEDeviceCredentials
+from .gimdow_ble import SERVICE_UUID
 
 from .const import (
     CONF_ACCESS_ID,
@@ -71,13 +71,12 @@ from .const import (
     GIMDOW_PRODUCT_NAME,
     DOMAIN,
     SMARTLIFE_APP,
-    TUYA_COUNTRIES,
     TUYA_RESPONSE_CODE,
     TUYA_RESPONSE_MSG,
     TUYA_RESPONSE_SUCCESS,
     TUYA_SMART_APP,
 )
-from .devices import GimdowBLEData, get_device_readable_name
+from .devices import get_device_readable_name
 from .cloud import HASSGimdowBLEDeviceManager
 
 _LOGGER = logging.getLogger(__name__)
@@ -92,22 +91,22 @@ async def _try_login(
     response: dict[Any, Any] | None = None
     data: dict[str, Any]
 
-    country = next(
-        (c for c in TUYA_COUNTRIES if c.name == user_input[CONF_COUNTRY_CODE]),
+    region = next(
+        (r for r in TUYA_REGIONS if r.name == user_input.get("region")),
         None,
     )
-    if country is None:
+    if region is None:
         errors["base"] = "invalid_auth"
         return None
 
     data = {
-        CONF_ENDPOINT: country.endpoint,
+        CONF_ENDPOINT: region.endpoint,
         CONF_AUTH_TYPE: AuthType.CUSTOM,
-        CONF_ACCESS_ID: user_input[CONF_ACCESS_ID],
-        CONF_ACCESS_SECRET: user_input[CONF_ACCESS_SECRET],
-        CONF_USERNAME: user_input[CONF_USERNAME],
-        CONF_PASSWORD: user_input[CONF_PASSWORD],
-        CONF_COUNTRY_CODE: country.country_code,
+        CONF_ACCESS_ID: user_input[CONF_ACCESS_ID].strip(),
+        CONF_ACCESS_SECRET: user_input[CONF_ACCESS_SECRET].strip(),
+        CONF_USERNAME: user_input[CONF_USERNAME].strip(),
+        CONF_PASSWORD: user_input[CONF_PASSWORD].strip(),
+        CONF_COUNTRY_CODE: region.country_code,
     }
 
     for app_type in (TUYA_SMART_APP, SMARTLIFE_APP, ""):
@@ -142,26 +141,12 @@ def _show_login_form(
     step_id: str = "login",
 ) -> FlowResult:
     """Shows the Tuya IOT platform login form."""
-    if user_input is not None and user_input.get(CONF_COUNTRY_CODE) is not None:
-        for country in TUYA_COUNTRIES:
-            if country.country_code == user_input[CONF_COUNTRY_CODE]:
-                user_input[CONF_COUNTRY_CODE] = country.name
-                break
-
-    def_country_name: str | None = None
-    if flow.hass.config.country:
-        for _c in TUYA_COUNTRIES:
-            if _c.country_code == flow.hass.config.country:
-                def_country_name = _c.name
-                break
-
     schema = {
         vol.Required(
-            CONF_COUNTRY_CODE,
-            default=user_input.get(CONF_COUNTRY_CODE, def_country_name),
+            "region",
+            default=user_input.get("region", "Europe"),
         ): vol.In(
-            # We don't pass a dict {code:name} because country codes can be duplicate.
-            [country.name for country in TUYA_COUNTRIES]
+            [region.name for region in TUYA_REGIONS]
         ),
         vol.Required(CONF_ACCESS_ID, default=user_input.get(CONF_ACCESS_ID, "")): str,
         vol.Required(
@@ -321,7 +306,7 @@ class GimdowBLEConfigFlow(ConfigFlow, domain=DOMAIN):
                 self._manager,
             )
         }
-        return await self.async_step_login()
+        return self.async_show_menu(step_id="user", menu_options=["login", "manual"])
 
     async def async_step_user(
         self, user_input: dict[str, Any] | None = None
@@ -553,7 +538,7 @@ class GimdowBLEConfigFlow(ConfigFlow, domain=DOMAIN):
                     CONF_ACCESS_SECRET,
                     CONF_USERNAME,
                     CONF_PASSWORD,
-                    CONF_COUNTRY_CODE,
+                    "region",
                 ]
             }
 

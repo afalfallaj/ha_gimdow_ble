@@ -19,7 +19,6 @@ import random
 from time import monotonic as _monotonic
 from collections.abc import Callable
 
-from bleak.backends.device import BLEDevice
 from bleak.exc import BleakDBusError
 from bleak_retry_connector import BLEAK_BACKOFF_TIME, BLEAK_RETRY_EXCEPTIONS
 from bleak_retry_connector import (

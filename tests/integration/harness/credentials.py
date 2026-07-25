@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import asyncio
 import os
-from typing import Any
 
 from tuya_iot import TuyaOpenAPI, AuthType
 
@@ -17,19 +16,10 @@ from custom_components.gimdow_ble.const import (
     TUYA_FACTORY_INFO_MAC,
     TUYA_RESPONSE_SUCCESS,
     TUYA_RESPONSE_RESULT,
-    CONF_UUID,
-    CONF_LOCAL_KEY,
-    CONF_CATEGORY,
-    CONF_PRODUCT_ID,
-    CONF_DEVICE_NAME,
-    CONF_PRODUCT_MODEL,
-    CONF_PRODUCT_NAME,
-    CONF_FUNCTIONS,
-    CONF_STATUS_RANGE,
-    TUYA_COUNTRIES,
     TUYA_SMART_APP,
     SMARTLIFE_APP,
 )
+from custom_components.gimdow_ble.tuya_api.const import TUYA_REGIONS
 
 
 class StandaloneManager(AbstractGimdowBLEDeviceManager):
@@ -124,17 +114,18 @@ async def fetch_credentials_from_cloud(
     access_secret: str,
     username: str,
     password: str,
-    country_code: str,
+    region_name: str,
     target_mac: str,
 ) -> tuple[GimdowBLEDeviceCredentials, str]:
-    country = next((c for c in TUYA_COUNTRIES if c.country_code == country_code), None)
-    if country:
-        endpoint = country.endpoint
-        print(f"\n  Country: {country.name}  endpoint: {endpoint}")
+    region = next((r for r in TUYA_REGIONS if r.name == region_name), None)
+    if region:
+        endpoint = region.endpoint
+        country_code = region.country_code
+        print(f"\n  Region: {region.name}  endpoint: {endpoint}  Phone Code: {country_code}")
     else:
         endpoint = _env("GIMDOW_CLOUD_ENDPOINT", "https://openapi.tuyaeu.com")
         print(
-            f"\n  Country code {country_code!r} not found in list, using endpoint: {endpoint}"
+            f"\n  Region not found in list, using endpoint: {endpoint}"
         )
 
     print("  Logging in to Tuya cloud…")
@@ -227,7 +218,7 @@ async def load_credentials_cloud(
             _env("GIMDOW_CLOUD_ACCESS_SECRET"),
             _env("GIMDOW_CLOUD_USERNAME"),
             _env("GIMDOW_CLOUD_PASSWORD"),
-            _env("GIMDOW_CLOUD_COUNTRY_CODE", "1"),
+            _env("GIMDOW_CLOUD_REGION", "Europe"),
             _env("GIMDOW_MAC"),
         )
     print("\n  -- Tuya cloud credential fetch --")
@@ -237,12 +228,12 @@ async def load_credentials_cloud(
     )
     username = await _prompt("username", "GIMDOW_CLOUD_USERNAME")
     password = await _prompt("password", "GIMDOW_CLOUD_PASSWORD", secret=True)
-    country_code = await _prompt(
-        "country_code", "GIMDOW_CLOUD_COUNTRY_CODE", default="1"
+    region_name = await _prompt(
+        "region_name (America/Europe/China/India)", "GIMDOW_CLOUD_REGION", default="Europe"
     )
     mac = await _prompt("BLE MAC address (AA:BB:CC:DD:EE:FF)", "GIMDOW_MAC")
     return await fetch_credentials_from_cloud(
-        access_id, access_secret, username, password, country_code, mac
+        access_id, access_secret, username, password, region_name, mac
     )
 
 
@@ -262,7 +253,7 @@ def _env_cloud_complete() -> bool:
             "GIMDOW_CLOUD_ACCESS_SECRET",
             "GIMDOW_CLOUD_USERNAME",
             "GIMDOW_CLOUD_PASSWORD",
-            "GIMDOW_CLOUD_COUNTRY_CODE",
+            "GIMDOW_CLOUD_REGION",
         )
     )
 

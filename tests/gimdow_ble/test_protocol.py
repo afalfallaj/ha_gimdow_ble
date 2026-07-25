@@ -6,7 +6,7 @@ import asyncio
 import hashlib
 import os
 from struct import pack, unpack
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes

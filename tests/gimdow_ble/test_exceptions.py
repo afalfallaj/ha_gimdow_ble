@@ -6,7 +6,6 @@ for the exceptions that are actually raised in production code.
 
 from __future__ import annotations
 
-import pytest
 
 from custom_components.gimdow_ble.gimdow_ble.exceptions import (
     GimdowBLEDataCRCError,

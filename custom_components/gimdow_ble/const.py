@@ -5,7 +5,6 @@ from __future__ import annotations
 from enum import StrEnum
 from typing import Final
 
-from .countries import Country, TUYA_COUNTRIES
 
 DOMAIN: Final = "gimdow_ble"
 
@@ -42,7 +41,7 @@ DEFAULT_AUTO_LOCK_DELAY_FALLBACK: Final = 30
 UNKNOWN_STATE_ACTION_CONFIRM_LAST: Final = "confirm_last"
 UNKNOWN_STATE_ACTION_DOUBLE_ON_ACTION: Final = "double_on_action"
 UNKNOWN_STATE_ACTION_FORCE_LOCK_TWICE: Final = "force_lock_twice"
-DEFAULT_UNKNOWN_STATE_ACTION: Final = UNKNOWN_STATE_ACTION_CONFIRM_LAST
+DEFAULT_UNKNOWN_STATE_ACTION: Final = UNKNOWN_STATE_ACTION_DOUBLE_ON_ACTION
 
 OPTIONS_ONLY_KEYS: Final = frozenset(
     {

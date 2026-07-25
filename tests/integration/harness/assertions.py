@@ -10,7 +10,7 @@ from typing import Any
 from custom_components.gimdow_ble.gimdow_ble.device import GimdowBLEDevice
 
 from . import state
-from .ble import BLEEvent, format_event, drain_queue
+from .ble import BLEEvent, format_event
 
 
 @dataclasses.dataclass
