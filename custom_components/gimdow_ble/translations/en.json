@@ -91,7 +91,7 @@
         "name": "Lock Volume"
       },
       "change_direction": {
-        "name": "Door handle position",
+        "name": "Door Handle Position",
         "state": {
           "right_hand": "Right hand",
           "left_hand": "Left hand"
