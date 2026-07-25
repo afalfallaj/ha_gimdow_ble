@@ -89,6 +89,13 @@
     "select": {
       "beep_volume": {
         "name": "Lock Volume"
+      },
+      "change_direction": {
+        "name": "Change direction",
+        "options": {
+          "right_hand": "Right hand Door",
+          "left_hand": "Left hand Door"
+        }
       }
     },
     "sensor": {
@@ -109,13 +116,6 @@
     "switch": {
       "auto_lock": {
         "name": "Auto lock"
-      },
-      "change_direction": {
-        "name": "Change direction",
-        "state": {
-          "off": "Standard",
-          "on": "Reversed"
-        }
       }
     }
   },
