@@ -39,29 +39,6 @@ GimdowBLESwitchIsAvailable = (
 
 
 @dataclass
-@dataclass
-class _SwitchExtraData(ExtraStoredData):
-    """Persisted independently of entity availability.
-
-    This switch's state lives only in HA (never on the device), but its
-    availability still follows BLE connectivity. A lock that's disconnected
-    (past its grace period) when HA stops would dump state="unavailable" —
-    parsing plain .state on restore would silently discard it.
-    """
-
-    is_on: bool
-
-    def as_dict(self) -> dict[str, Any]:
-        return {"is_on": self.is_on}
-
-    @classmethod
-    def from_dict(cls, restored: dict[str, Any]) -> _SwitchExtraData | None:
-        try:
-            return cls(bool(restored["is_on"]))
-        except KeyError:
-            return None
-
-
 class GimdowBLESwitchMapping:
     dp_id: int
     description: SwitchEntityDescription
@@ -97,6 +74,7 @@ def get_mapping_by_device(device: GimdowBLEDevice) -> list[GimdowBLESwitchMappin
 # ---------------------------------------------------------------------------
 # Shared base — thin BLE DP switch (real hardware switch)
 # ---------------------------------------------------------------------------
+
 
 
 @dataclass
