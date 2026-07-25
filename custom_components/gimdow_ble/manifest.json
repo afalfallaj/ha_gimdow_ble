@@ -1,9 +1,7 @@
 {
   "domain": "gimdow_ble",
   "name": "Gimdow A1 Pro Max BLE",
-  "after_dependencies": [
-    "tuya"
-  ],
+  "after_dependencies": [],
   "bluetooth": [
     {
       "connectable": true,
@@ -26,8 +24,6 @@
     "custom_components.gimdow_ble"
   ],
   "quality_scale": "custom",
-  "requirements": [
-    "tuya-iot-py-sdk>=0.6.6,<0.7"
-  ],
+  "requirements": [],
   "version": "3.3.6"
 }

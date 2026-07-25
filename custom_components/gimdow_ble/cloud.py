@@ -19,11 +19,9 @@ from homeassistant.const import (
 
 from homeassistant.core import HomeAssistant
 
-from tuya_iot import (
-    TuyaOpenAPI,
-    AuthType,
-    TuyaOpenMQ,
-)
+from homeassistant.helpers.aiohttp_client import async_get_clientsession
+
+from .tuya_api import TuyaOpenAPI, AuthType
 
 from .gimdow_ble import (
     AbstractGimdowBLEDeviceManager,
@@ -146,8 +144,9 @@ class HASSGimdowBLEDeviceManager(AbstractGimdowBLEDeviceManager):
         )
         api.set_dev_channel("hass")
 
-        response = await self._hass.async_add_executor_job(
-            api.connect,
+        session = async_get_clientsession(self._hass)
+        response = await api.connect(
+            session,
             data.get(CONF_USERNAME, ""),
             data.get(CONF_PASSWORD, ""),
             data.get(CONF_COUNTRY_CODE, ""),
@@ -180,16 +179,17 @@ class HASSGimdowBLEDeviceManager(AbstractGimdowBLEDeviceManager):
         return await self.login_with_credentials(self._data, add_to_cache)
 
     async def _fill_cache_item(self, item: TuyaCloudCacheItem) -> None:
-        devices_response = await self._hass.async_add_executor_job(
-            item.api.get,
+        session = async_get_clientsession(self._hass)
+        devices_response = await item.api.get(
+            session,
             TUYA_API_DEVICES_URL % (item.api.token_info.uid),
         )
         if devices_response.get(TUYA_RESPONSE_RESULT):
             devices = devices_response.get(TUYA_RESPONSE_RESULT)
             if isinstance(devices, Iterable):
                 for device in devices:
-                    fi_response = await self._hass.async_add_executor_job(
-                        item.api.get,
+                    fi_response = await item.api.get(
+                        session,
                         TUYA_API_FACTORY_INFO_URL % (device.get("id")),
                     )
 
@@ -213,8 +213,8 @@ class HASSGimdowBLEDeviceManager(AbstractGimdowBLEDeviceManager):
                                 CONF_PRODUCT_NAME: device.get("product_name"),
                             }
 
-                            spec_response = await self._hass.async_add_executor_job(
-                                item.api.get,
+                            spec_response = await item.api.get(
+                                session,
                                 TUYA_API_DEVICE_SPECIFICATION % device.get("id"),
                             )
 
