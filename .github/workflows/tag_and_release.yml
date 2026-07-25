@@ -5,6 +5,7 @@ on:
     branches: ["main", "dev"]
     paths-ignore:
       - '.github/**'
+      - '**/*.md'
 
 jobs:
   generate-dev:
