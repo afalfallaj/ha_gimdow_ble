@@ -16,10 +16,10 @@ from custom_components.gimdow_ble.const import (
     TUYA_FACTORY_INFO_MAC,
     TUYA_RESPONSE_SUCCESS,
     TUYA_RESPONSE_RESULT,
-    TUYA_REGIONS,
     TUYA_SMART_APP,
     SMARTLIFE_APP,
 )
+from custom_components.gimdow_ble.tuya_api.const import TUYA_REGIONS
 
 
 class StandaloneManager(AbstractGimdowBLEDeviceManager):

@@ -6,7 +6,7 @@ import logging
 from typing import Any
 
 import voluptuous as vol
-from .tuya_api import AuthType
+from .tuya_api import AuthType, TUYA_REGIONS
 
 from homeassistant.config_entries import (
     ConfigEntry,
@@ -71,7 +71,6 @@ from .const import (
     GIMDOW_PRODUCT_NAME,
     DOMAIN,
     SMARTLIFE_APP,
-    TUYA_REGIONS,
     TUYA_RESPONSE_CODE,
     TUYA_RESPONSE_MSG,
     TUYA_RESPONSE_SUCCESS,
