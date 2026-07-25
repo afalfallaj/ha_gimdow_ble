@@ -1,7 +1,3 @@
-## [v3.3.6] - 2026-07-25
-
-
-
 # Changelog
 
 All notable changes to this project will be documented in this file.
@@ -10,41 +6,42 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [v3.3.6] - 2026-07-25
 
-### ### Features
+### Features
 
 * update Tuya integration documentation links and add placeholders for dynamic URLs ([e3b2e18](https://github.com/afalfallaj/ha_gimdow_ble/commit/e3b2e187b7a15e402f37f95bb0d2e180657537b8))
 
 ## [3.3.5](https://github.com/afalfallaj/ha_gimdow_ble/compare/v3.3.4...v3.3.5) (2026-07-24)
 
 
-### ### Bug Fixes
+### Bug Fixes
 
 * improve error logging for connection failures and document BLE 4.2 requirement for ESPHome compatibility ([1b9f6f6](https://github.com/afalfallaj/ha_gimdow_ble/commit/1b9f6f661331e34dbc172b1978bbdd74bfacad52))
 
 ## [3.3.4](https://github.com/afalfallaj/ha_gimdow_ble/compare/v3.3.3...v3.3.4) (2026-07-24)
 
 
-### ### Bug Fixes
+### Bug Fixes
 
 * update unlock datapoint ID and value for Gimdow lock mapping ([aea2d3f](https://github.com/afalfallaj/ha_gimdow_ble/commit/aea2d3f6369a014e7c8b4c83df51e9f1aa203cfc))
 
 ## [3.3.3](https://github.com/afalfallaj/ha_gimdow_ble/compare/v3.3.2...v3.3.3) (2026-07-24)
 
 
-### ### Bug Fixes
+### Bug Fixes
 
 * await cancellation of resolution task to prevent potential race conditions ([69bf35e](https://github.com/afalfallaj/ha_gimdow_ble/commit/69bf35ee52c8256c78763e5da63569f4a83f7568))
 
 ## [4.0.0-beta.2](https://github.com/afalfallaj/ha_gimdow_ble/compare/v4.0.0-beta.1...v4.0.0-beta.2) (2026-07-24)
 
 
-### ### Features
+### Features
 
 * add medium battery state, simplify beep volume options, and remove config entry refresh timeout ([5708fb3](https://github.com/afalfallaj/ha_gimdow_ble/commit/5708fb3b2e2111966c33a0952b9df1d86f71555e))
 
 
-### ### Bug Fixes
+### Bug Fixes
 
 * add overall command timeouts and enable cancellation of redundant resolution tasks ([9a02d36](https://github.com/afalfallaj/ha_gimdow_ble/commit/9a02d3674275387e98d6c04214ff3805ab0ed14d))
 * await cancellation of resolution task to prevent potential race conditions ([69bf35e](https://github.com/afalfallaj/ha_gimdow_ble/commit/69bf35ee52c8256c78763e5da63569f4a83f7568))
@@ -54,35 +51,35 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 ## [3.3.2](https://github.com/afalfallaj/ha_gimdow_ble/compare/v3.3.1...v3.3.2) (2026-07-24)
 
 
-### ### Bug Fixes
+### Bug Fixes
 
 * update Gimdow lock mapping to use correct datapoint ID and value for unlocking ([d34f12a](https://github.com/afalfallaj/ha_gimdow_ble/commit/d34f12ab680411471bfa53ac36c933cc0feab677))
 
 ## [3.3.1](https://github.com/afalfallaj/ha_gimdow_ble/compare/v3.3.0...v3.3.1) (2026-07-24)
 
 
-### ### Bug Fixes
+### Bug Fixes
 
 * initialize coordinator in connected state and normalize Bluetooth address casing ([08db794](https://github.com/afalfallaj/ha_gimdow_ble/commit/08db7945ae1cf33797563ddbc4fd232b2faf68d1))
 
 ## [3.3.0](https://github.com/afalfallaj/ha_gimdow_ble/compare/v3.2.1...v3.3.0) (2026-07-24)
 
 
-### ### Features
+### Features
 
 * add medium battery state, simplify beep volume options, and remove config entry refresh timeout ([5708fb3](https://github.com/afalfallaj/ha_gimdow_ble/commit/5708fb3b2e2111966c33a0952b9df1d86f71555e))
 
 ## [3.2.1](https://github.com/afalfallaj/ha_gimdow_ble/compare/v3.2.0...v3.2.1) (2026-07-24)
 
 
-### ### Bug Fixes
+### Bug Fixes
 
 * add overall command timeouts and enable cancellation of redundant resolution tasks ([9a02d36](https://github.com/afalfallaj/ha_gimdow_ble/commit/9a02d3674275387e98d6c04214ff3805ab0ed14d))
 
 ## [3.2.0](https://github.com/afalfallaj/ha_gimdow_ble/compare/v3.1.0...v3.2.0) (2026-07-18)
 
 
-### ### Features
+### Features
 
 * add validation workflow and update integration components for Gimdow BLE ([a7df25c](https://github.com/afalfallaj/ha_gimdow_ble/commit/a7df25c64eda4e8bd1014779397f863ba3a33f2d))
 * enhance restore functionality for entities ([9f5e8bb](https://github.com/afalfallaj/ha_gimdow_ble/commit/9f5e8bb9a6ac20c8f32c017fd63edc3538b7de24))
@@ -92,7 +89,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 * sync dev manifest after stable release and update documentation ([98c4329](https://github.com/afalfallaj/ha_gimdow_ble/commit/98c4329e256f61ca2e6f8f9408f68fa7ac3dbdef))
 
 
-### ### Bug Fixes
+### Bug Fixes
 
 * improve logging for missing packets and handle known ESPHome proxy drop ([56d3b7f](https://github.com/afalfallaj/ha_gimdow_ble/commit/56d3b7f629ae2720946e029242221b21b0b71e50))
 * improve logging for missing packets and handle known ESPHome proxy drop ([bcc1ece](https://github.com/afalfallaj/ha_gimdow_ble/commit/bcc1ece57ef3e60f7ada6c4f4caf45482bd91689))
@@ -106,7 +103,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 * overhaul integration improvements, add test suite, and migrate CI to release-please ([#27](https://github.com/afalfallaj/ha_gimdow_ble/issues/27))
 * overhaul integration improvements, add test suite, and migrate CI to release-please
 
-### ### Features
+### Features
 
 * Add `_send_control_datapoint_wait_for_echo` helper and refactor `resolve_unknown_state` to use it for more robust unlock command handling. ([6c53bd4](https://github.com/afalfallaj/ha_gimdow_ble/commit/6c53bd4c62b3229e50678a9a3a8213fcf1ae8ae8))
 * add `EntityCategory` import to button platform ([2b0b058](https://github.com/afalfallaj/ha_gimdow_ble/commit/2b0b058eb1269721ece2e590849893ede7249d10))
@@ -155,7 +152,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 * sync dev manifest after stable release and update documentation ([98c4329](https://github.com/afalfallaj/ha_gimdow_ble/commit/98c4329e256f61ca2e6f8f9408f68fa7ac3dbdef))
 
 
-### ### Bug Fixes
+### Bug Fixes
 
 * Activity logbook record accuracy ([3b7c75e](https://github.com/afalfallaj/ha_gimdow_ble/commit/3b7c75e0c2597a8c3a05c20b728bbdf53045cfae))
 * Add disconnect and delay to reset lock position awareness before the second unlock attempt. ([e7b6127](https://github.com/afalfallaj/ha_gimdow_ble/commit/e7b61274adae525c06441307fc999f31d1d2a0d4))
@@ -196,7 +193,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 * update release manifest files for versioning consistency ([e47410c](https://github.com/afalfallaj/ha_gimdow_ble/commit/e47410c7e4e41e97473edfe3d601ba61530e8c5f))
 
 
-### ### Refactoring
+### Refactoring
 
 * Change datapoint access for auto-lock delay from `.get()` to direct `[]` indexing. ([abdf3f6](https://github.com/afalfallaj/ha_gimdow_ble/commit/abdf3f6293283595bdd0893f79eb3019107e4dad))
 * Convert entity control methods and lock polling to async/await ([aa1a4df](https://github.com/afalfallaj/ha_gimdow_ble/commit/aa1a4df36c926a4695f9f283b9066aba34069471))
@@ -216,7 +213,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 * Use direct dictionary access instead of `.get()` for datapoint retrieval. ([894271d](https://github.com/afalfallaj/ha_gimdow_ble/commit/894271d7a93702ecda52608a96c665ba57b07062))
 
 
-### ### Documentation
+### Documentation
 
 * Remove `changes.md` release notes document. ([7c22158](https://github.com/afalfallaj/ha_gimdow_ble/commit/7c22158ef071ac8c1cf69719b79f68ded41c6ad7))
 * replace AES with cryptography library for encryption and decryption ([d87e98b](https://github.com/afalfallaj/ha_gimdow_ble/commit/d87e98bc9d3a39ac4eb01cfb4137ec5c26e8388f))
@@ -225,21 +222,21 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 ## [3.0.0-beta.8](https://github.com/afalfallaj/ha_gimdow_ble/compare/v3.0.0-beta.7...v3.0.0-beta.8) (2026-05-18)
 
 
-### ### Bug Fixes
+### Bug Fixes
 
 * improve logging for missing packets and handle known ESPHome proxy drop ([bcc1ece](https://github.com/afalfallaj/ha_gimdow_ble/commit/bcc1ece57ef3e60f7ada6c4f4caf45482bd91689))
 
 ## [3.0.0-beta.7](https://github.com/afalfallaj/ha_gimdow_ble/compare/v3.0.0-beta.6...v3.0.0-beta.7) (2026-05-17)
 
 
-### ### Features
+### Features
 
 * sync dev manifest after stable release and update documentation ([98c4329](https://github.com/afalfallaj/ha_gimdow_ble/commit/98c4329e256f61ca2e6f8f9408f68fa7ac3dbdef))
 
 ## [3.0.0-beta.6](https://github.com/afalfallaj/ha_gimdow_ble/compare/v3.0.0-beta.5...v3.0.0-beta.6) (2026-05-17)
 
 
-### ### Bug Fixes
+### Bug Fixes
 
 * schedule update on packet loss ([a493674](https://github.com/afalfallaj/ha_gimdow_ble/commit/a49367447549fdb3269e624454a9538899a7d578))
 * update release manifest files for versioning consistency ([e47410c](https://github.com/afalfallaj/ha_gimdow_ble/commit/e47410c7e4e41e97473edfe3d601ba61530e8c5f))
@@ -247,52 +244,52 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 ## [3.0.0-beta.5](https://github.com/afalfallaj/ha_gimdow_ble/compare/v3.0.0-beta.4...v3.0.0-beta.5) (2026-05-17)
 
 
-### ### Features
+### Features
 
 * add tracking for last good sequence number and code name in protocol ([7f8ff12](https://github.com/afalfallaj/ha_gimdow_ble/commit/7f8ff12a8bae4e5caec697ba69c17fbe7afe6978))
 
 
-### ### Bug Fixes
+### Bug Fixes
 
 * update release manifest files for versioning consistency ([e47410c](https://github.com/afalfallaj/ha_gimdow_ble/commit/e47410c7e4e41e97473edfe3d601ba61530e8c5f))
 
 ## [3.0.0-beta.5](https://github.com/afalfallaj/ha_gimdow_ble/compare/v3.0.0-beta.4...v3.0.0-beta.5) (2026-05-17)
 
 
-### ### Features
+### Features
 
 * add tracking for last good sequence number and code name in protocol ([7f8ff12](https://github.com/afalfallaj/ha_gimdow_ble/commit/7f8ff12a8bae4e5caec697ba69c17fbe7afe6978))
 
 ## [3.0.0-beta.4](https://github.com/afalfallaj/ha_gimdow_ble/compare/v3.0.0-beta.3...v3.0.0-beta.4) (2026-05-17)
 
 
-### ### Refactoring
+### Refactoring
 
 * simplify double command logic to always send two commands for lock state changes ([a3dad8f](https://github.com/afalfallaj/ha_gimdow_ble/commit/a3dad8fccca285ec3c3d7deaa93c64762f46553e))
 
 ## [3.0.0-beta.3](https://github.com/afalfallaj/ha_gimdow_ble/compare/v3.0.0-beta.2...v3.0.0-beta.3) (2026-05-17)
 
 
-### ### Features
+### Features
 
 * enhance double command logic to support forced two attempts for locking/unlocking ([2c7ac66](https://github.com/afalfallaj/ha_gimdow_ble/commit/2c7ac6620936a04f265e1f6dc65c2cbd03f553e2))
 
 ## [3.0.0-beta.2](https://github.com/afalfallaj/ha_gimdow_ble/compare/v3.0.0-beta.1...v3.0.0-beta.2) (2026-05-17)
 
 
-### ### Refactoring
+### Refactoring
 
 * replace AES with cryptography library for encryption and decryption ([d87e98b](https://github.com/afalfallaj/ha_gimdow_ble/commit/d87e98bc9d3a39ac4eb01cfb4137ec5c26e8388f))
 
 ## [3.0.0-beta.1](https://github.com/afalfallaj/ha_gimdow_ble/compare/v3.0.0-beta.0...v3.0.0-beta.1) (2026-05-16)
 
 
-### ### Features
+### Features
 
 * add auto-merge step for pre-release PRs in release workflow ([6e0d03c](https://github.com/afalfallaj/ha_gimdow_ble/commit/6e0d03cb6c0d24c4ed57bda8700ee28bd29fb077))
 
 
-### ### Bug Fixes
+### Bug Fixes
 
 * correct JSON parsing for auto-merge pre-release PR step ([350579d](https://github.com/afalfallaj/ha_gimdow_ble/commit/350579d7cc52dceb3b78f1b3ae06e84e398cded8))
 * specify repository in auto-merge command for pre-release PRs ([17d341f](https://github.com/afalfallaj/ha_gimdow_ble/commit/17d341f224665a2884d70f9b4a9008cd4a79b65e))

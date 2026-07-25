@@ -99,19 +99,43 @@ jobs:
           # Get git log since last tag
           PREV_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
           if [ -z "$PREV_TAG" ]; then
-            LOGS=$(git log --oneline --no-merges)
+            RANGE="HEAD"
           else
-            LOGS=$(git log ${PREV_TAG}..HEAD --oneline --no-merges)
+            RANGE="${PREV_TAG}..HEAD"
           fi
 
-          # Prepare temporary changelog block
-          NEW_CHANGELOG="## [$RAW_TAG] - $DATE\n\n$LOGS\n\n"
+          # Group conventional commits
+          FEAT=$(git log $RANGE -i --grep="^feat" --oneline --no-merges | sed 's/^[a-f0-9]* /* /')
+          FIX=$(git log $RANGE -i --grep="^fix" --oneline --no-merges | sed 's/^[a-f0-9]* /* /')
+          REFACTOR=$(git log $RANGE -i --grep="^refactor" --oneline --no-merges | sed 's/^[a-f0-9]* /* /')
           
-          # Prepend to existing CHANGELOG.md (or create if missing)
+          BODY=""
+          if [ -n "$FEAT" ]; then BODY="${BODY}### Features\n$FEAT\n\n"; fi
+          if [ -n "$FIX" ]; then BODY="${BODY}### Bug Fixes\n$FIX\n\n"; fi
+          if [ -n "$REFACTOR" ]; then BODY="${BODY}### Refactoring\n$REFACTOR\n\n"; fi
+          
+          # Fallback if no conventional commits matched
+          if [ -z "$BODY" ]; then 
+            BODY=$(git log $RANGE --oneline --no-merges | sed 's/^[a-f0-9]* /* /')
+            BODY="${BODY}\n\n"
+          fi
+          
+          ENTRY="## [$RAW_TAG] - $DATE\n\n$BODY"
+          
+          # Export to GITHUB_ENV for the GitHub Release step
+          echo "RELEASE_BODY<<EOF" >> $GITHUB_ENV
+          echo -e "$BODY" >> $GITHUB_ENV
+          echo "EOF" >> $GITHUB_ENV
+          
+          # Inject into CHANGELOG.md below the header (after the first '---')
           if [ -f CHANGELOG.md ]; then
-            echo -e "$NEW_CHANGELOG$(cat CHANGELOG.md)" > CHANGELOG.md
+            awk -v insert="$(echo -e "$ENTRY")" '
+              /^---/ && !inserted {print; print ""; print insert; inserted=1; next}
+              {print}
+              END {if(!inserted) print "\n" insert}
+            ' CHANGELOG.md > temp.md && mv temp.md CHANGELOG.md
           else
-            echo -e "# Changelog\n\n$NEW_CHANGELOG" > CHANGELOG.md
+            echo -e "# Changelog\n\nAll notable changes to this project will be documented in this file.\n\n---\n\n$ENTRY" > CHANGELOG.md
           fi
 
       # Step 4: Commit updated files back to main branch
@@ -144,4 +168,4 @@ jobs:
           tag_name: ${{ steps.push_tag.outputs.new_tag }}
           name: ${{ steps.push_tag.outputs.new_tag }}
           prerelease: false
-          generate_release_notes: true
+          body: ${{ env.RELEASE_BODY }}
