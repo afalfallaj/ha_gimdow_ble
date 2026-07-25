@@ -88,7 +88,11 @@
     },
     "select": {
       "beep_volume": {
-        "name": "Lock Volume"
+        "name": "Lock Volume",
+        "state": {
+          "mute": "Mute",
+          "normal": "Normal"
+        }
       },
       "change_direction": {
         "name": "Door Handle Position",
