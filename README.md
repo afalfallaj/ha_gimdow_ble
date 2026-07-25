@@ -4,16 +4,16 @@
 [![GitHub Release][release-badge]][release-url]
 [![License][license-badge]](LICENSE)
 
-**Local Bluetooth (BLE) integration for the Gimdow A1 Pro Max smart lock in Home Assistant.**
+**The definitive, standalone Home Assistant integration for the Gimdow A1 Pro Max smart lock.**
 
-No cloud required for day-to-day operation. Tuya Cloud credentials are only used during initial setup to retrieve your device keys.
+Designed from the ground up for stability and speed, this custom component uses a lightweight, native asynchronous client. **100% Local Execution:** The Tuya cloud is ONLY used once during setup to extract your device keys (or completely bypassed using the manual method). After setup, your lock never talks to the internet.
 
 ---
 
 ## Contents
 
 - [Features](#features)
-- [Supported Devices](#supported-devices)
+- [Why choose this over generic Tuya integrations?](#why-choose-this-over-generic-tuya-integrations)
 - [Prerequisites](#prerequisites)
 - [Installation](#installation)
 - [Setup](#setup)
@@ -28,6 +28,8 @@ No cloud required for day-to-day operation. Tuya Cloud credentials are only used
 
 ## Features
 
+- **No Tuya Developer Account Required** — Extract your `local_key` manually and use the manual setup flow to bypass the Tuya Cloud developer portal completely.
+- **Zero Dependency Bloat** — Uses a lightweight, native, async Tuya OpenAPI client with no heavy external SDKs.
 - **Lock / Unlock** — full control from Home Assistant, automations, and voice assistants.
 - **Real-time state** — lock position pushed over BLE; no polling.
 - **Battery state** — enum sensor reporting `high`, `normal`, `low`, or `poweroff`.
@@ -39,35 +41,32 @@ No cloud required for day-to-day operation. Tuya Cloud credentials are only used
 - **Calibration buttons** — Sync Clock, Recalibrate, Unlock More, Keep Retracted, Add Force.
 - **ESPHome Bluetooth proxy** compatible.
 
----
+## Why choose this over generic Tuya integrations?
 
-## Supported Devices
+Unlike generic Tuya BLE integrations, this custom component is a specialized rewrite engineered specifically for the hardware quirks of the Gimdow A1 Pro Max:
 
-| Device | Product ID | Status |
-|--------|-----------|--------|
-| Gimdow A1 Pro Max | `rlyxv7pe` | ✅ Supported |
+- **Custom State Recovery:** Implements unique strategies (*Confirm Last*, *Force Lock Twice*) to bypass the Gimdow lock's failure to report its state upon reconnection.
+- **Double-Command Handling:** Safely queues commands to prevent the lock from silently dropping concurrent Bluetooth packets.
+- **Virtual Auto-Lock:** Adds logic that the physical hardware lacks, complete with door-sensor safety interlocks to prevent jamming.
+- **Rock-Solid Stability:** Achieves incredible range and reliability when paired with an ESPHome Bluetooth Proxy placed near the door.
 
-Other Gimdow models that use the Tuya BLE protocol may work but are untested.
+**Supported Devices:** Currently fully supports the **Gimdow A1 Pro Max** (Product ID: `rlyxv7pe`). Other Gimdow models that use the Tuya BLE protocol may work but are untested.
 
 ---
 
 ## Prerequisites
 
-- Home Assistant **2024.3** or later.
+- Home Assistant **2025.8.0** or later.
 - A Bluetooth adapter or [ESPHome Bluetooth proxy](https://esphome.io/components/bluetooth_proxy.html) within range of the lock.
   - **Important for ESPHome users**: If you are using ESP supports BLE 5.you must force the Bluetooth stack to use BLE 4.2, as the lock hardware may reject BLE 5.0 connections (status 133 / Cmd Disallowed). Add this to your ESPHome YAML:
     ```yaml
-    esp32:
-      board: esp32-c6-devkitc-1
-      framework:
-        type: esp-idf
         sdkconfig_options:
           # Explicitly enable BLE 4.2 support
           CONFIG_BT_BLE_42_FEATURES_SUPPORTED: "y"
           # Disable BLE 5.0 features (forces fallback to BLE 4.2 mode)
           CONFIG_BT_BLE_50_FEATURES_SUPPORTED: "n"
     ```
-- For automatic setup: a [Tuya IoT Platform](https://iot.tuya.com/) account linked to the app where the lock was registered. See the [official Tuya integration guide](https://www.home-assistant.io/integrations/tuya/) for credential instructions.
+- **To get your device keys**, you can either use the official [Tuya IoT Platform](https://iot.tuya.com/) for automatic setup, OR extract them manually (see the Tuya Developer Account Bypass guide below).
 
 ---
 
@@ -90,6 +89,18 @@ Other Gimdow models that use the Tuya BLE protocol may work but are untested.
 ---
 
 ## Setup
+
+### 🚀 How to Bypass the Tuya IoT Developer Account (Get local_key easily)
+
+> **Note:** This bypass method is **only used to extract your `local_key` and `UUID`**. It does not change how the integration works locally.
+
+If you do not want to create a Tuya IoT Developer account to get your `local_key`, you can extract it using a third-party community tool:
+
+1. Use a tool like the [`tinytuya` wizard](https://github.com/jasonacox/tinytuya) or [`tuya-uncover`](https://github.com/blakadder/tuya-uncover) to scan your devices using your standard Smart Life / Tuya App email and password.
+2. Locate the `local_key`, `UUID`, and `device_id` for your Gimdow lock in the tool's output.
+3. In Home Assistant, select **Manual Entry (Advanced)** during setup and paste your extracted keys.
+
+### Adding the Integration
 
 Go to **Settings → Devices & Services → Add Integration** and search for **Gimdow A1 Pro Max BLE**.
 
@@ -223,9 +234,7 @@ logger:
 
 This is an **unofficial** community integration and is not affiliated with or endorsed by Gimdow or Tuya. It is provided "as is" without warranty of any kind.
 
----
-
-*Built on the work of [@airy10](https://github.com/airy10) and [@redphx](https://github.com/redphx).*
+*Inspired by early Tuya BLE research by @airy10 and @redphx, completely re-engineered specifically for Gimdow hardware constraints.*
 
 <!-- Badges -->
 [hacs-badge]: https://img.shields.io/badge/HACS-Custom-orange.svg
