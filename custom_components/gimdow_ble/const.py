@@ -5,7 +5,6 @@ from __future__ import annotations
 from enum import StrEnum
 from typing import Final
 
-from .tuya_api import TuyaRegion, TUYA_REGIONS
 
 DOMAIN: Final = "gimdow_ble"
 

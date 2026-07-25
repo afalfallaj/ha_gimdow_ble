@@ -22,7 +22,6 @@ from .scenarios import (
     scenario_11,
     scenario_12,
     ScenarioResult,
-    META,
 )
 from .report import generate_report
 

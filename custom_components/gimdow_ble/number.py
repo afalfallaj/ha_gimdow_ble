@@ -11,7 +11,7 @@ from homeassistant.components.number import (
     NumberEntityDescription,
     RestoreNumber,
 )
-from homeassistant.components.number.const import NumberDeviceClass, NumberMode
+from homeassistant.components.number.const import NumberMode
 from homeassistant.const import UnitOfTime
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.entity import EntityCategory

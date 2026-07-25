@@ -2,11 +2,9 @@
 
 from __future__ import annotations
 
-import asyncio
 import hashlib
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
 
-import pytest
 
 from custom_components.gimdow_ble.gimdow_ble.const import GimdowBLEDataPointType
 from custom_components.gimdow_ble.gimdow_ble.datapoints import (

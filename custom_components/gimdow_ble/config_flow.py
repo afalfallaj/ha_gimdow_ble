@@ -37,7 +37,7 @@ from homeassistant.helpers.selector import (
 from homeassistant.core import callback
 from homeassistant.data_entry_flow import FlowHandler, FlowResult
 
-from .gimdow_ble import SERVICE_UUID, GimdowBLEDeviceCredentials
+from .gimdow_ble import SERVICE_UUID
 
 from .const import (
     CONF_ACCESS_ID,
@@ -77,7 +77,7 @@ from .const import (
     TUYA_RESPONSE_SUCCESS,
     TUYA_SMART_APP,
 )
-from .devices import GimdowBLEData, get_device_readable_name
+from .devices import get_device_readable_name
 from .cloud import HASSGimdowBLEDeviceManager
 
 _LOGGER = logging.getLogger(__name__)

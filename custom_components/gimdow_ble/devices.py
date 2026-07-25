@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 import asyncio
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import TYPE_CHECKING, Callable, Generic, TypeVar
 import logging
 
@@ -40,7 +40,6 @@ from .const import (
     DOMAIN,
     SET_DISCONNECTED_DELAY,
     DEFAULT_UNKNOWN_STATE_ACTION,
-    UNKNOWN_STATE_ACTION_CONFIRM_LAST,
 )
 
 _LOGGER = logging.getLogger(__name__)

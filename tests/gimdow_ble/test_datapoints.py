@@ -17,7 +17,6 @@ from custom_components.gimdow_ble.gimdow_ble.datapoints import (
 )
 from tests.gimdow_ble.conftest import BatchableGimdowBLEDataPoints
 from custom_components.gimdow_ble.gimdow_ble.exceptions import (
-    GimdowBLEDataFormatError,
     GimdowBLEEnumValueError,
 )
 from custom_components.gimdow_ble.const import DPType

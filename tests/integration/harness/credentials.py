@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import asyncio
 import os
-from typing import Any
 
 from tuya_iot import TuyaOpenAPI, AuthType
 
@@ -17,15 +16,6 @@ from custom_components.gimdow_ble.const import (
     TUYA_FACTORY_INFO_MAC,
     TUYA_RESPONSE_SUCCESS,
     TUYA_RESPONSE_RESULT,
-    CONF_UUID,
-    CONF_LOCAL_KEY,
-    CONF_CATEGORY,
-    CONF_PRODUCT_ID,
-    CONF_DEVICE_NAME,
-    CONF_PRODUCT_MODEL,
-    CONF_PRODUCT_NAME,
-    CONF_FUNCTIONS,
-    CONF_STATUS_RANGE,
     TUYA_REGIONS,
     TUYA_SMART_APP,
     SMARTLIFE_APP,

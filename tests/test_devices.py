@@ -9,7 +9,6 @@ import pytest
 
 from custom_components.gimdow_ble.devices import (
     GimdowBLECoordinator,
-    GimdowBLEProductInfo,
     get_device_info,
     get_device_product_info,
     get_product_info_by_ids,

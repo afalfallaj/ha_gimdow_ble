@@ -27,7 +27,6 @@ from .const import (
     BATTERY_STATE_HIGH,
     BATTERY_STATE_LOW,
     BATTERY_STATE_MEDIUM,
-    BATTERY_STATE_NORMAL,
     BATTERY_STATE_POWEROFF,
 )
 from .devices import (

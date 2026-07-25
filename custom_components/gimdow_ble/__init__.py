@@ -27,7 +27,6 @@ from .const import (
     CONF_TRANSITION_TIMEOUT,
     OPTIONS_ONLY_KEYS,
     DEFAULT_UNKNOWN_STATE_ACTION,
-    UNKNOWN_STATE_ACTION_CONFIRM_LAST,
 )
 from .devices import GimdowBLECoordinator, GimdowBLEData, get_device_product_info
 

@@ -25,15 +25,11 @@ import logging
 import secrets
 import time
 from struct import pack, unpack
-from typing import Any
 
 from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
 
 from .const import (
-    CHARACTERISTIC_NOTIFY,
-    CHARACTERISTIC_WRITE,
     GATT_MTU,
-    RESPONSE_WAIT_TIMEOUT,
     GimdowBLECode,
     GimdowBLEDataPointType,
 )

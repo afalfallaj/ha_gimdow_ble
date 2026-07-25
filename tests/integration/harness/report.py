@@ -1,11 +1,9 @@
 from __future__ import annotations
 
 import datetime
-from typing import Any
 
 from custom_components.gimdow_ble.gimdow_ble.device import GimdowBLEDevice
 
-from .ble import BLEEvent, format_event
 from .assertions import CrossRefAnswer
 from .scenarios import ScenarioResult, _find_result
 
