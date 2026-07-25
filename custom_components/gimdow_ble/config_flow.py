@@ -93,7 +93,7 @@ async def _try_login(
     data: dict[str, Any]
 
     region = next(
-        (r for r in TUYA_REGIONS if r.name == user_input[CONF_COUNTRY_CODE]),
+        (r for r in TUYA_REGIONS if r.name == user_input.get("region")),
         None,
     )
     if region is None:
@@ -144,8 +144,8 @@ def _show_login_form(
     """Shows the Tuya IOT platform login form."""
     schema = {
         vol.Required(
-            CONF_COUNTRY_CODE,
-            default=user_input.get(CONF_COUNTRY_CODE),
+            "region",
+            default=user_input.get("region", "Europe"),
         ): vol.In(
             [region.name for region in TUYA_REGIONS]
         ),
@@ -539,7 +539,7 @@ class GimdowBLEConfigFlow(ConfigFlow, domain=DOMAIN):
                     CONF_ACCESS_SECRET,
                     CONF_USERNAME,
                     CONF_PASSWORD,
-                    CONF_COUNTRY_CODE,
+                    "region",
                 ]
             }
 

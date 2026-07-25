@@ -130,10 +130,10 @@ class HASSGimdowBLEDeviceManager(AbstractGimdowBLEDeviceManager):
         return True
 
     async def login_with_credentials(
-        self, data: dict[str, Any], add_to_cache: bool
+        self, data: dict[str, Any], add_to_cache: bool = False
     ) -> dict[Any, Any]:
         """Login into Tuya cloud using an explicit credentials dictionary."""
-        if len(data) == 0:
+        if not data or not data.get(CONF_ENDPOINT) or not data.get(CONF_ACCESS_ID):
             return {}
 
         api = TuyaOpenAPI(

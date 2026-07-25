@@ -22,7 +22,7 @@
         "data": {
           "access_id": "Tuya IoT Access ID",
           "access_secret": "Tuya IoT Access Secret",
-          "country_code": "Tuya Cloud Region",
+          "region": "Tuya Cloud Region",
           "password": "Tuya Password",
           "username": "Tuya Account"
         },
@@ -45,7 +45,7 @@
         "data": {
           "access_id": "Tuya IoT Access ID",
           "access_secret": "Tuya IoT Access Secret",
-          "country_code": "Tuya Cloud Region",
+          "region": "Tuya Cloud Region",
           "password": "Tuya Password",
           "username": "Tuya Account"
         }
