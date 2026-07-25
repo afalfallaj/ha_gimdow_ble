@@ -102,10 +102,10 @@ async def _try_login(
     data = {
         CONF_ENDPOINT: region.endpoint,
         CONF_AUTH_TYPE: AuthType.CUSTOM,
-        CONF_ACCESS_ID: user_input[CONF_ACCESS_ID],
-        CONF_ACCESS_SECRET: user_input[CONF_ACCESS_SECRET],
-        CONF_USERNAME: user_input[CONF_USERNAME],
-        CONF_PASSWORD: user_input[CONF_PASSWORD],
+        CONF_ACCESS_ID: user_input[CONF_ACCESS_ID].strip(),
+        CONF_ACCESS_SECRET: user_input[CONF_ACCESS_SECRET].strip(),
+        CONF_USERNAME: user_input[CONF_USERNAME].strip(),
+        CONF_PASSWORD: user_input[CONF_PASSWORD].strip(),
         CONF_COUNTRY_CODE: region.country_code,
     }
 

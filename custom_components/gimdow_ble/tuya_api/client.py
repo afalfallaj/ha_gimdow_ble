@@ -70,7 +70,7 @@ class TuyaOpenAPI:
         str_to_sign += "\n"
 
         content_to_sha256 = (
-            "" if body is None or len(body.keys()) == 0 else json.dumps(body)
+            "" if body_str is None or len(body_str) == 0 else body_str
         )
 
         str_to_sign += (
@@ -182,12 +182,12 @@ class TuyaOpenAPI:
         method: str,
         path: str,
         params: dict[str, Any] | None = None,
-        body: dict[str, Any] | None = None,
+        body_str: str | None = None,
     ) -> dict[str, Any]:
         await self.__refresh_access_token_if_need(session, path)
 
         access_token = self.token_info.access_token if self.token_info else ""
-        sign, t = self._calculate_sign(method, path, params, body)
+        sign, t = self._calculate_sign(method, path, params, body_str)
         headers = {
             "client_id": self.access_id,
             "sign": sign,
@@ -207,7 +207,7 @@ class TuyaOpenAPI:
         url = self.endpoint + path
         try:
             async with session.request(
-                method, url, params=params, json=body, headers=headers
+                method, url, params=params, data=body_str, headers=headers
             ) as response:
                 if not response.ok:
                     _LOGGER.error("Tuya API response error: code=%s", response.status)
@@ -233,10 +233,12 @@ class TuyaOpenAPI:
         return await self.__request(session, "GET", path, params, None)
 
     async def post(self, session: ClientSession, path: str, body: dict[str, Any] | None = None) -> dict[str, Any]:
-        return await self.__request(session, "POST", path, None, body)
+        body_str = json.dumps(body) if body else ""
+        return await self.__request(session, "POST", path, None, body_str)
 
     async def put(self, session: ClientSession, path: str, body: dict[str, Any] | None = None) -> dict[str, Any]:
-        return await self.__request(session, "PUT", path, None, body)
+        body_str = json.dumps(body) if body else ""
+        return await self.__request(session, "PUT", path, None, body_str)
 
     async def delete(self, session: ClientSession, path: str, params: dict[str, Any] | None = None) -> dict[str, Any]:
         return await self.__request(session, "DELETE", path, params, None)
