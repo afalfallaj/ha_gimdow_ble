@@ -92,7 +92,7 @@
       },
       "change_direction": {
         "name": "Door handle position",
-        "options": {
+        "state": {
           "right_hand": "Right hand",
           "left_hand": "Left hand"
         }
