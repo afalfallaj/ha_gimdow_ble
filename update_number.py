@@ -1,96 +1,10 @@
-"""The Gimdow BLE integration."""
+import re
 
-from __future__ import annotations
+with open("custom_components/gimdow_ble/number.py", "r") as f:
+    content = f.read()
 
-from dataclasses import dataclass
-
-import logging
-from typing import Callable
-
-from homeassistant.components.number import (
-    NumberEntityDescription,
-    RestoreNumber,
-)
-from homeassistant.components.number.const import NumberDeviceClass, NumberMode
-from homeassistant.const import UnitOfTime
-from homeassistant.core import HomeAssistant, callback
-from homeassistant.helpers.entity import EntityCategory
-from homeassistant.helpers.entity_platform import AddEntitiesCallback
-from homeassistant.helpers.dispatcher import async_dispatcher_send
-from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
-
-from . import GimdowBLEConfigEntry
-from .devices import (
-    GimdowBLECategoryMapping,
-    GimdowBLEData,
-    GimdowBLEEntity,
-    GimdowBLEProductInfo,
-    get_platform_mapping,
-)
-from .gimdow_ble import GimdowBLEDataPointType, GimdowBLEDevice
-
-_LOGGER = logging.getLogger(__name__)
-
-GimdowBLENumberGetter = (
-    Callable[["GimdowBLENumber", GimdowBLEProductInfo], float | None] | None
-)
-
-
-GimdowBLENumberIsAvailable = (
-    Callable[["GimdowBLENumber", GimdowBLEProductInfo], bool] | None
-)
-
-
-GimdowBLENumberSetter = (
-    Callable[["GimdowBLENumber", GimdowBLEProductInfo, float], None] | None
-)
-
-
-@dataclass
-class GimdowBLENumberMapping:
-    dp_id: int
-    description: NumberEntityDescription
-    force_add: bool = True
-    dp_type: GimdowBLEDataPointType | None = None
-    coefficient: float = 1.0
-    is_available: GimdowBLENumberIsAvailable = None
-    getter: GimdowBLENumberGetter = None
-    setter: GimdowBLENumberSetter = None
-    mode: NumberMode = NumberMode.BOX
-    send_time_signal: bool = False
-
-
-GimdowBLECategoryNumberMapping = GimdowBLECategoryMapping[GimdowBLENumberMapping]
-
-mapping: dict[str, GimdowBLECategoryNumberMapping] = {
-    "jtmspro": GimdowBLECategoryNumberMapping(
-        products={
-            "rlyxv7pe": [  # Gimdow
-                GimdowBLENumberMapping(
-                    dp_id=36,
-                    description=NumberEntityDescription(
-                        key="auto_lock_time",
-                        icon="mdi:lock-clock",
-                        native_max_value=1800,
-                        native_min_value=1,
-                        native_unit_of_measurement=UnitOfTime.SECONDS,
-                        native_step=1,
-                        entity_category=EntityCategory.CONFIG,
-                    ),
-                    send_time_signal=True,
-                ),
-            ],
-        },
-    ),
-}
-
-
-def get_mapping_by_device(device: GimdowBLEDevice) -> list[GimdowBLENumberMapping]:
-    return get_platform_mapping(mapping, device)
-
-
-class GimdowBLENumber(GimdowBLEEntity, RestoreNumber):
-    """Representation of a Gimdow BLE Number."""
+new_class = """class GimdowBLENumber(GimdowBLEEntity, RestoreNumber):
+    \"\"\"Representation of a Gimdow BLE Number.\"\"\"
 
     def __init__(
         self,
@@ -107,7 +21,7 @@ class GimdowBLENumber(GimdowBLEEntity, RestoreNumber):
         self._master_value: float | None = None
 
     async def async_added_to_hass(self) -> None:
-        """Handle entity which will be added."""
+        \"\"\"Handle entity which will be added.\"\"\"
         await super().async_added_to_hass()
 
         if self._product.is_lock:
@@ -162,7 +76,7 @@ class GimdowBLENumber(GimdowBLEEntity, RestoreNumber):
 
     @property
     def native_value(self) -> float | None:
-        """Return the entity value to represent the entity state."""
+        \"\"\"Return the entity value to represent the entity state.\"\"\"
         if self._mapping.getter:
             return self._mapping.getter(self, self._product)
 
@@ -175,7 +89,7 @@ class GimdowBLENumber(GimdowBLEEntity, RestoreNumber):
         return self._master_value
 
     async def async_set_native_value(self, value: float) -> None:
-        """Set new value."""
+        \"\"\"Set new value.\"\"\"
         if self._mapping.setter:
             self._mapping.setter(self, self._product, value)
             return
@@ -197,34 +111,14 @@ class GimdowBLENumber(GimdowBLEEntity, RestoreNumber):
 
     @property
     def available(self) -> bool:
-        """Return if entity is available."""
+        \"\"\"Return if entity is available.\"\"\"
         result = super().available
         if result and self._mapping.is_available:
             result = self._mapping.is_available(self, self._product)
         return result
+"""
 
+content = re.sub(r'class GimdowBLENumber\(GimdowBLEEntity, RestoreNumber\):.*?(?=\n\n\nasync def async_setup_entry)', new_class, content, flags=re.DOTALL)
 
-
-async def async_setup_entry(
-    hass: HomeAssistant,
-    entry: GimdowBLEConfigEntry,
-    async_add_entities: AddEntitiesCallback,
-) -> None:
-    """Set up the Gimdow BLE sensors."""
-    data = entry.runtime_data
-    mappings = get_mapping_by_device(data.device)
-    entities: list[GimdowBLENumber] = []
-    for mapping in mappings:
-        if mapping.force_add or data.device.datapoints.has_id(
-            mapping.dp_id, mapping.dp_type
-        ):
-            entities.append(
-                GimdowBLENumber(
-                    data.coordinator,
-                    data.device,
-                    data.product,
-                    mapping,
-                    data=data,
-                )
-            )
-    async_add_entities(entities)
+with open("custom_components/gimdow_ble/number.py", "w") as f:
+    f.write(content)

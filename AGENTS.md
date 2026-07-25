@@ -41,6 +41,15 @@ All commits **must** use [Conventional Commits](https://www.conventionalcommits.
 
 ---
 
+## Configuration Entities (Master State)
+
+The Gimdow lock may send stale or default data for configuration settings (e.g., volume, auto-lock time, direction) upon reconnecting or after a power cycle. To combat this, Home Assistant acts as the **master state** for configuration entities (DP31, DP33, DP36, DP78).
+- **Master State Pattern:** Configuration entities (`select.py`, `number.py`, `switch.py`) maintain a master state in memory, which is persisted across restarts via `RestoreEntity`.
+- **Overwrite Stale Pushes:** Inside `_handle_coordinator_update()`, if the device pushes a value that mismatches the HA master state, HA ignores the push and immediately queues a command to overwrite the lock's datapoint with HA's master state.
+- **Exceptions:** This logic strictly applies to settings. It explicitly does **NOT** apply to the physical lock position (`DP47`), which relies purely on device truth (see below).
+
+---
+
 ## Hardware Findings (DP47 / Lock State)
 
 These findings are confirmed by hardware test results (`test-res.txt`).

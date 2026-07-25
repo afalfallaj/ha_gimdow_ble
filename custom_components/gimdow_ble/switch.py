@@ -61,13 +61,6 @@ mapping: dict[str, GimdowBLECategorySwitchMapping] = {
                         entity_category=EntityCategory.CONFIG,
                     ),
                 ),
-                GimdowBLESwitchMapping(
-                    dp_id=78,
-                    description=SwitchEntityDescription(
-                        key="change_direction",
-                        entity_category=EntityCategory.CONFIG,
-                    ),
-                ),
             ],
         },
     ),
@@ -83,7 +76,31 @@ def get_mapping_by_device(device: GimdowBLEDevice) -> list[GimdowBLESwitchMappin
 # ---------------------------------------------------------------------------
 
 
-class GimdowBLESwitch(GimdowBLEEntity, SwitchEntity):
+
+@dataclass
+class _SwitchExtraData(ExtraStoredData):
+    """Persisted independently of entity availability.
+
+    This switch's state lives only in HA (never on the device), but its
+    availability still follows BLE connectivity. A lock that's disconnected
+    (past its grace period) when HA stops would dump state="unavailable" —
+    parsing plain .state on restore would silently discard it.
+    """
+
+    is_on: bool
+
+    def as_dict(self) -> dict[str, Any]:
+        return {"is_on": self.is_on}
+
+    @classmethod
+    def from_dict(cls, restored: dict[str, Any]) -> _SwitchExtraData | None:
+        try:
+            return cls(bool(restored["is_on"]))
+        except KeyError:
+            return None
+
+
+class GimdowBLESwitch(GimdowBLEEntity, SwitchEntity, RestoreEntity):
     """Representation of a Gimdow BLE Switch backed directly by a device DP."""
 
     def __init__(
@@ -97,15 +114,63 @@ class GimdowBLESwitch(GimdowBLEEntity, SwitchEntity):
         super().__init__(coordinator, device, product, mapping.description)
         self._mapping = mapping
         self._data = data
+        self._master_state: bool | None = None
+
+    @property
+    def extra_restore_state_data(self) -> _SwitchExtraData:
+        return _SwitchExtraData(self.is_on)
+
+    async def async_added_to_hass(self) -> None:
+        await super().async_added_to_hass()
+        if self._product.is_lock:
+            if (last_extra := await self.async_get_last_extra_data()) is not None:
+                restored = _SwitchExtraData.from_dict(last_extra.as_dict())
+                if restored is not None:
+                    self._master_state = restored.is_on
+                    self._device.datapoints.get_or_create(
+                        self._mapping.dp_id,
+                        GimdowBLEDataPointType.DT_BOOL,
+                        restored.is_on,
+                    )
+
+    @callback
+    def _handle_coordinator_update(self) -> None:
+        datapoint = self._device.datapoints[self._mapping.dp_id]
+        if datapoint:
+            device_state = bool(datapoint.value)
+            
+            if self._master_state is None:
+                self._master_state = device_state
+            elif device_state != self._master_state:
+                _LOGGER.warning(
+                    "[%s] Device pushed %s=%s, but HA master is %s. Overwriting device.",
+                    self._device.address,
+                    self._mapping.description.key,
+                    device_state,
+                    self._master_state
+                )
+                dp = self._device.datapoints.get_or_create(
+                    self._mapping.dp_id,
+                    GimdowBLEDataPointType.DT_BOOL,
+                    self._master_state,
+                )
+                self._device._create_safe_task(dp.set_value(self._master_state))
+
+        self.async_write_ha_state()
 
     @property
     def is_on(self) -> bool:
+        if self._master_state is not None:
+            return self._master_state
         datapoint = self._device.datapoints[self._mapping.dp_id]
         if datapoint:
             return bool(datapoint.value)
         return False
 
     async def _write_dp(self, turn_on: bool) -> None:
+        self._master_state = turn_on
+        self.async_write_ha_state()
+        
         datapoint = self._device.datapoints.get_or_create(
             self._mapping.dp_id,
             GimdowBLEDataPointType.DT_BOOL,
@@ -127,32 +192,12 @@ class GimdowBLESwitch(GimdowBLEEntity, SwitchEntity):
         return result
 
 
+
 # ---------------------------------------------------------------------------
 # Virtual auto-lock switch — HA owns the timing; hardware DP33 stays OFF
 # ---------------------------------------------------------------------------
 
 
-@dataclass
-class _VirtualAutoLockExtraData(ExtraStoredData):
-    """Persisted independently of entity availability.
-
-    This switch's state lives only in HA (never on the device), but its
-    availability still follows BLE connectivity. A lock that's disconnected
-    (past its grace period) when HA stops would dump state="unavailable" —
-    parsing plain .state on restore would silently discard it.
-    """
-
-    is_on: bool
-
-    def as_dict(self) -> dict[str, Any]:
-        return {"is_on": self.is_on}
-
-    @classmethod
-    def from_dict(cls, restored: dict[str, Any]) -> _VirtualAutoLockExtraData | None:
-        try:
-            return cls(bool(restored["is_on"]))
-        except KeyError:
-            return None
 
 
 class GimdowBLEVirtualAutoLockSwitch(GimdowBLEEntity, SwitchEntity, RestoreEntity):
@@ -178,15 +223,15 @@ class GimdowBLEVirtualAutoLockSwitch(GimdowBLEEntity, SwitchEntity, RestoreEntit
         self._last_dp33: bool | None = None
 
     @property
-    def extra_restore_state_data(self) -> _VirtualAutoLockExtraData:
-        return _VirtualAutoLockExtraData(self.is_on)
+    def extra_restore_state_data(self) -> _SwitchExtraData:
+        return _SwitchExtraData(self.is_on)
 
     async def async_added_to_hass(self) -> None:
         await super().async_added_to_hass()
 
         if self._product.is_lock:
             if (last_extra := await self.async_get_last_extra_data()) is not None:
-                restored = _VirtualAutoLockExtraData.from_dict(last_extra.as_dict())
+                restored = _SwitchExtraData.from_dict(last_extra.as_dict())
                 if restored is not None:
                     self._data.virtual_auto_lock = restored.is_on
                     async_dispatcher_send(

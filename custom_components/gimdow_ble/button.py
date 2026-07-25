@@ -56,6 +56,7 @@ mapping: dict[str, GimdowBLECategoryButtonMapping] = {
                         key="sync_clock",
                         icon="mdi:clock",
                         entity_category=EntityCategory.CONFIG,
+                        entity_registry_enabled_default=False,
                     ),
                 ),
                 GimdowBLEButtonMapping(
