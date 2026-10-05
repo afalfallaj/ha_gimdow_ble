@@ -87,7 +87,7 @@ class TestSelectRestore:
         await entity.async_added_to_hass()
 
         device.datapoints.get_or_create.assert_called_once_with(
-            31, GimdowBLEDataPointType.DT_ENUM, "function1"
+            31, GimdowBLEDataPointType.DT_STRING, "function1"
         )
 
     async def test_no_restore_data_does_not_touch_datapoint_cache(self) -> None:

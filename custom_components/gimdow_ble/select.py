@@ -42,6 +42,29 @@ class GimdowBLESelectMapping:
 GimdowBLECategorySelectMapping = GimdowBLECategoryMapping[GimdowBLESelectMapping]
 
 mapping: dict[str, GimdowBLECategorySelectMapping] = {
+    "ms": GimdowBLECategorySelectMapping(
+        products={
+            "uueg45qu": [
+                GimdowBLESelectMapping(
+                    dp_id=30,
+                    description=SelectEntityDescription(
+                        key="beep_volume",
+                        options=["mute", "normal"],
+                        entity_category=EntityCategory.CONFIG,
+                    ),
+                ),
+                GimdowBLESelectMapping(
+                    dp_id=48,
+                    description=SelectEntityDescription(
+                        key="motor_direction",
+                        name="Motor direction",
+                        options=["clockwise", "anticlockwise"],
+                        entity_category=EntityCategory.CONFIG,
+                    ),
+                ),
+            ],
+        },
+    ),
     "jtmspro": GimdowBLECategorySelectMapping(
         products={
             "rlyxv7pe":  # Smart Lock

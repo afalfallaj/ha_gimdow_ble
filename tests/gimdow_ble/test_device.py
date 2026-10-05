@@ -235,6 +235,17 @@ class TestSetBleDeviceAndAdvertisement:
         assert dev._ble_device is new_ble
         assert dev._advertisement_data is new_advert
 
+    def test_updated_advertisement_sets_protocol_before_next_connection(self) -> None:
+        from custom_components.gimdow_ble.gimdow_ble.const import MANUFACTURER_DATA_ID
+
+        dev = _make_device()
+        advert = MagicMock()
+        advert.service_data = {}
+        advert.manufacturer_data = {MANUFACTURER_DATA_ID: b"\x80\x03\x00\x00\x00\x00\x00"}
+        dev.set_ble_device_and_advertisement_data(dev._ble_device, advert)
+        assert dev._protocol_version == 3
+        assert dev._is_bound is True
+
 
 # ---------------------------------------------------------------------------
 # TestBuildPairingRequest
@@ -386,6 +397,21 @@ class TestDecodeAdvertisementData:
 
 
 class TestSendControlDatapoint:
+    async def test_a1_pro_unlock_uses_raw_wire_payload(self) -> None:
+        dev = _make_device()
+        dev._send_packet = AsyncMock()
+        await dev.send_control_datapoint(6, b"\x01\x01")
+        assert dev.datapoints[6].type == GimdowBLEDataPointType.DT_RAW
+        # DP6, raw type, two-byte payload: unlock, member 1.
+        assert bytes(dev._send_packet.call_args.args[1]) == b"\x06\x00\x02\x01\x01"
+
+    async def test_a1_pro_unlock_after_device_reply_remains_raw(self) -> None:
+        dev = _make_device()
+        dev._send_packet = AsyncMock()
+        dev.datapoints._update_from_device(6, 0, 0, GimdowBLEDataPointType.DT_RAW, b"\x01\x01")
+        await dev.send_control_datapoint(6, b"\x01\x01")
+        assert bytes(dev._send_packet.call_args.args[1]) == b"\x06\x00\x02\x01\x01"
+
     async def test_creates_datapoint_and_sets_value(self) -> None:
         dev = _make_device()
         dev._datapoints._send_callback = AsyncMock()

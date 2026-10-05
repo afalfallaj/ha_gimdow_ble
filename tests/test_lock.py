@@ -19,8 +19,11 @@ from __future__ import annotations
 from types import SimpleNamespace
 from unittest.mock import MagicMock
 
+import pytest
+
 from custom_components.gimdow_ble.devices import GimdowBLEData
 from custom_components.gimdow_ble.lock import GimdowBLELock, GimdowBLELockMapping
+from custom_components.gimdow_ble.gimdow_ble.lock_manager import LockTransitionState
 
 
 def _make_device(*, address: str = "AA:BB:CC:DD:EE:FF") -> MagicMock:
@@ -106,3 +109,54 @@ class TestLockAddedToHass:
         await entity.async_added_to_hass()
 
         assert entity._lock_manager._door_state_known is True
+
+
+class TestPhysicalPositionReports:
+    @pytest.mark.parametrize("locked", [True, False])
+    def test_manual_report_recovers_after_command_timeout(self, locked) -> None:
+        device = _make_device()
+        entity, _ = _make_lock(device)
+        entity._was_connected = True
+        entity._coordinator.connected = True
+        entity._coordinator.updated_datapoint_ids = frozenset({47})
+        entity._lock_manager._transition_state = LockTransitionState.TIMEOUT_UNKNOWN
+        entity._lock_manager._last_known_state = not locked
+        entity._last_is_locked = not locked
+        device.get_lock_state.return_value = locked
+
+        assert entity.is_locked is None
+        entity._handle_coordinator_update()
+
+        assert entity.is_locked is locked
+        assert entity._lock_manager._last_known_state is locked
+        assert entity._attr_changed_by == "Manual"
+        device.send_control_datapoint.assert_not_called()
+
+    def test_battery_update_does_not_recover_stale_position(self) -> None:
+        device = _make_device()
+        entity, _ = _make_lock(device)
+        entity._was_connected = True
+        entity._coordinator.connected = True
+        entity._coordinator.updated_datapoint_ids = frozenset({9})
+        entity._lock_manager._transition_state = LockTransitionState.TIMEOUT_UNKNOWN
+        device.get_lock_state.return_value = True
+
+        entity._handle_coordinator_update()
+
+        assert entity.is_locked is None
+        assert entity._lock_manager._last_known_state is None
+
+    @pytest.mark.parametrize("locked", [True, False])
+    def test_manual_report_updates_known_position(self, locked) -> None:
+        device = _make_device()
+        entity, _ = _make_lock(device)
+        entity._was_connected = True
+        entity._coordinator.connected = True
+        entity._coordinator.updated_datapoint_ids = frozenset({47})
+        entity._last_is_locked = not locked
+        device.get_lock_state.return_value = locked
+
+        entity._handle_coordinator_update()
+
+        assert entity.is_locked is locked
+        assert entity._attr_changed_by == "Manual"
