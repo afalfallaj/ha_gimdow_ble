@@ -80,6 +80,7 @@ class GimdowBLEDevice(GimdowBLEConnection, GimdowBLEProtocol):
     ) -> None:
         self._ble_device = ble_device
         self._advertisement_data = advertisement_data
+        self._decode_advertisement_data()
 
     async def initialize(self) -> None:
         _LOGGER.debug("%s: Initializing", self.address)
@@ -279,9 +280,12 @@ class GimdowBLEDevice(GimdowBLEConnection, GimdowBLEProtocol):
         self, dp_id: int, value: Any
     ) -> GimdowBLEDataPoint:
         """Send a control datapoint (e.g. lock/unlock command)."""
-        datapoint = self.get_or_create_datapoint(
-            dp_id, GimdowBLEDataPointType.DT_BOOL, value
+        dp_type = (
+            GimdowBLEDataPointType.DT_RAW
+            if isinstance(value, bytes)
+            else GimdowBLEDataPointType.DT_BOOL
         )
+        datapoint = self.get_or_create_datapoint(dp_id, dp_type, value)
         await datapoint.set_value(value)
         return datapoint
 

@@ -113,6 +113,7 @@ class GimdowBLECoordinator(DataUpdateCoordinator[GimdowBLEDevice]):
             update_interval=None,
         )
         self._device = device
+        self.updated_datapoint_ids: frozenset[int] = frozenset()
         self._disconnected: bool = False
         self._unsub_disconnect: CALLBACK_TYPE | None = None
         self._unregister_callbacks: list[Callable[[], None]] = [
@@ -178,7 +179,13 @@ class GimdowBLECoordinator(DataUpdateCoordinator[GimdowBLEDevice]):
         if self._unsub_disconnect is not None:
             self._unsub_disconnect()
             self._unsub_disconnect = None
-        self.async_set_updated_data(self._device)
+        # Distinguish a live position report from an unrelated update that
+        # merely carries the same device object and its cached datapoints.
+        self.updated_datapoint_ids = frozenset(dp.id for dp in updates)
+        try:
+            self.async_set_updated_data(self._device)
+        finally:
+            self.updated_datapoint_ids = frozenset()
 
     @callback
     def _set_disconnected(self, _: None) -> None:
@@ -220,6 +227,7 @@ class GimdowBLEData:
     virtual_auto_lock_signal: str
     virtual_auto_lock_time_signal: str
     virtual_auto_lock: bool = False
+    ha_auto_lock_delay: int | None = None
     is_door_open: bool | None = None
     has_door_sensor: bool = False
     unknown_state_action: str = DEFAULT_UNKNOWN_STATE_ACTION
@@ -233,6 +241,11 @@ class GimdowBLECategoryInfo:
 
 
 devices_database: dict[str, GimdowBLECategoryInfo] = {
+    "ms": GimdowBLECategoryInfo(
+        products={
+            "uueg45qu": GimdowBLEProductInfo(name="A1 PRO", is_lock=True),
+        },
+    ),
     "jtmspro": GimdowBLECategoryInfo(
         products={
             "rlyxv7pe":  # Gimdow device product_id

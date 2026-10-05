@@ -51,7 +51,20 @@ Unlike generic Tuya BLE integrations, this custom component is a specialized rew
 - **Virtual Auto-Lock:** Adds logic that the physical hardware lacks, complete with door-sensor safety interlocks to prevent jamming.
 - **Rock-Solid Stability:** Achieves incredible range and reliability when paired with an ESPHome Bluetooth Proxy placed near the door.
 
-**Supported Devices:** Currently fully supports the **Gimdow A1 Pro Max** (Product ID: `rlyxv7pe`). Other Gimdow models that use the Tuya BLE protocol may work but are untested.
+**Supported Devices:** Gimdow **A1 Pro Max** (`jtmspro/rlyxv7pe`) and **A1 PRO** (`ms/uueg45qu`). Available controls differ by model; see below. Other Gimdow models that use the Tuya BLE protocol may work but are untested.
+
+### A1 PRO (`uueg45qu`)
+
+The A1 PRO has model-specific lock/unlock commands, battery state, sound volume, and motor direction controls. It also exposes:
+
+- **HA auto-lock** and **HA auto-lock delay**: a local Home Assistant timer, off by default, with a delay of 1–1800 whole seconds. The initial delay uses the configured fallback (30 seconds by default). These settings persist across restarts and never write the Pro Max's unsupported hardware auto-lock datapoints.
+- **Last battery alarm**: the most recent device-reported `low_battery` or `power_off` alarm. It starts unknown until a report arrives; a normal battery-level update does not clear the last alarm.
+
+To use HA auto-lock, configure a door/contact sensor in the integration options, set the delay, then enable the switch. The timer waits for a known door reading and bolt position, and uses the existing door-open safety interlock. Home Assistant and a working BLE connection are required; this is not a timer running independently on the lock.
+
+Pro Max calibration, extra-force, and keep-retracted controls are not exposed for the A1 PRO because equivalent commands have not been verified. The A1 PRO unlock command uses Tuya's legacy raw DP6 payload (unlock action and member ID 1), whereas the Pro Max keeps its existing boolean command.
+
+Manual knob changes received over BLE update the bolt state, including after an HA command has timed out. Changes made during a BLE outage cannot be reconstructed by polling.
 
 ---
 

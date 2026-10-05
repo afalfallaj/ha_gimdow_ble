@@ -92,6 +92,40 @@ mapping: dict[str, GimdowBLECategorySensorMapping] = {
 }
 
 
+# Both products report the same DP9 battery enum.
+mapping["ms"] = GimdowBLECategorySensorMapping(
+    products={
+        "uueg45qu": [
+            *mapping["jtmspro"].products["rlyxv7pe"],
+            GimdowBLESensorMapping(
+                dp_id=21,
+                description=SensorEntityDescription(
+                    key="last_battery_alarm",
+                    name="Last battery alarm",
+                    icon="mdi:battery-alert",
+                    device_class=SensorDeviceClass.ENUM,
+                    options=["low_battery", "power_off"],
+                ),
+                getter=lambda sensor: _read_battery_alarm(sensor),
+            ),
+        ],
+    },
+)
+
+
+def _read_battery_alarm(sensor: GimdowBLESensor) -> None:
+    """Last reported alarm, not an active/cleared flag; ignore malformed values."""
+    dp = sensor._device.datapoints[21]
+    if dp is not None:
+        sensor._attr_native_value = (
+            sensor.entity_description.options[dp.value]
+            if dp.type == GimdowBLEDataPointType.DT_ENUM
+            and isinstance(dp.value, int)
+            and 0 <= dp.value < 2
+            else None
+        )
+
+
 def rssi_getter(sensor: GimdowBLESensor) -> None:
     sensor._attr_native_value = sensor._device.rssi
 
@@ -133,6 +167,10 @@ class GimdowBLESensor(GimdowBLEEntity, SensorEntity, RestoreEntity):
 
         if self._product.is_lock:
             if (last_state := await self.async_get_last_state()) is not None:
+                if self.entity_description.key == "last_battery_alarm":
+                    if last_state.state in self.entity_description.options:
+                        self._attr_native_value = last_state.state
+                    return
                 if last_state.state != "unknown":
                     self._attr_native_value = last_state.state
 

@@ -85,6 +85,9 @@
     "number": {
       "auto_lock_time": {
         "name": "Auto lock time"
+      },
+      "ha_auto_lock_delay": {
+        "name": "HA auto-lock delay"
       }
     },
     "select": {
@@ -101,6 +104,13 @@
           "right_hand": "Right hand",
           "left_hand": "Left hand"
         }
+      },
+      "motor_direction": {
+        "name": "Motor direction",
+        "state": {
+          "clockwise": "Clockwise",
+          "anticlockwise": "Anticlockwise"
+        }
       }
     },
     "sensor": {
@@ -116,11 +126,21 @@
       },
       "signal_strength": {
         "name": "Signal strength"
+      },
+      "last_battery_alarm": {
+        "name": "Last battery alarm",
+        "state": {
+          "low_battery": "Low battery",
+          "power_off": "Power off"
+        }
       }
     },
     "switch": {
       "auto_lock": {
         "name": "Auto lock"
+      },
+      "ha_auto_lock": {
+        "name": "HA auto-lock"
       }
     }
   },

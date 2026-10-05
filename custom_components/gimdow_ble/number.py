@@ -212,6 +212,11 @@ async def async_setup_entry(
 ) -> None:
     """Set up the Gimdow BLE sensors."""
     data = entry.runtime_data
+    from .ha_controls import GimdowBLEHAAutoLockDelay, supports_ha_auto_lock
+
+    if supports_ha_auto_lock(data.device):
+        async_add_entities([GimdowBLEHAAutoLockDelay(data)])
+        return
     mappings = get_mapping_by_device(data.device)
     entities: list[GimdowBLENumber] = []
     for mapping in mappings:

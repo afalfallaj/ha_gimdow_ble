@@ -125,6 +125,27 @@ class TestGetDeviceInfo:
 
 
 class TestCoordinatorUpdate:
+    def test_push_ids_only_exposed_during_listener_update(self, hass) -> None:
+        coordinator = GimdowBLECoordinator(hass, _make_device())
+        seen = []
+        coordinator.async_set_updated_data = lambda _: seen.append(
+            coordinator.updated_datapoint_ids
+        )
+        dp = MagicMock()
+        dp.id = 47
+        coordinator._async_handle_update([dp])
+        assert seen == [frozenset({47})]
+        assert coordinator.updated_datapoint_ids == frozenset()
+
+    def test_push_ids_cleared_if_listener_raises(self, hass) -> None:
+        coordinator = GimdowBLECoordinator(hass, _make_device())
+        coordinator.async_set_updated_data = MagicMock(side_effect=RuntimeError)
+        dp = MagicMock()
+        dp.id = 47
+        with pytest.raises(RuntimeError):
+            coordinator._async_handle_update([dp])
+        assert coordinator.updated_datapoint_ids == frozenset()
+
     async def test_successful_update_returns_device(self, hass) -> None:
         dev = _make_device()
         result = await GimdowBLECoordinator(hass, dev)._async_update_data()

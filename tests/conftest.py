@@ -130,6 +130,14 @@ class _LockEntity(_Entity):
     """Stand-in for homeassistant.components.lock.LockEntity."""
 
 
+class _SensorEntity(_Entity):
+    """Stand-in for homeassistant.components.sensor.SensorEntity."""
+
+
+class _ButtonEntity(_Entity):
+    """Stand-in for homeassistant.components.button.ButtonEntity."""
+
+
 # ---------------------------------------------------------------------------
 # homeassistant.components.bluetooth.match stub
 # ---------------------------------------------------------------------------
@@ -182,6 +190,11 @@ _ha_select.SelectEntity = _SelectEntity
 _ha_lock = MagicMock()
 _ha_lock.LockEntity = _LockEntity
 
+_ha_sensor = MagicMock()
+_ha_sensor.SensorEntity = _SensorEntity
+_ha_button = MagicMock()
+_ha_button.ButtonEntity = _ButtonEntity
+
 
 # BleakNotFoundError must be a distinct class (not OSError) so that
 # `except BleakNotFoundError: raise` in _send_packet does NOT absorb plain
@@ -223,6 +236,7 @@ sys.modules.update(
         "homeassistant.config_entries": MagicMock(),
         # helpers
         "homeassistant.helpers": MagicMock(),
+        "homeassistant.helpers.aiohttp_client": MagicMock(),
         "homeassistant.helpers.event": _ha_event,
         "homeassistant.helpers.update_coordinator": _ha_udc,
         "homeassistant.helpers.entity": MagicMock(),
@@ -234,10 +248,10 @@ sys.modules.update(
         "homeassistant.components": MagicMock(),
         "homeassistant.components.bluetooth": MagicMock(),
         "homeassistant.components.bluetooth.match": _ha_bluetooth_match,
-        "homeassistant.components.sensor": MagicMock(),
+        "homeassistant.components.sensor": _ha_sensor,
         "homeassistant.components.binary_sensor": MagicMock(),
         "homeassistant.components.lock": _ha_lock,
-        "homeassistant.components.button": MagicMock(),
+        "homeassistant.components.button": _ha_button,
         "homeassistant.components.switch": _ha_switch,
         "homeassistant.components.select": _ha_select,
         "homeassistant.components.number": _ha_number,

@@ -86,9 +86,10 @@ class LockManagerConfig:
     unlock_dp_id: int
     state_dp_id: int
     lock_value: bool
-    unlock_value: bool
+    unlock_value: bool | bytes
     get_auto_lock: Callable[[], bool]
     has_door_sensor: bool = False
+    get_auto_lock_delay: Callable[[], int | None] | None = None
 
 
 class PendingLockIntent:
@@ -757,8 +758,14 @@ class GimdowBLELockManager:
             return
 
         delay = self._config.auto_lock_delay_fallback
+        local_delay = (
+            self._config.get_auto_lock_delay()
+            if self._config.get_auto_lock_delay is not None else None
+        )
         dp_auto_lock_time = self._device.datapoints[DP_AUTO_LOCK_TIME]
-        if dp_auto_lock_time and dp_auto_lock_time.value:
+        if local_delay is not None:
+            delay = local_delay
+        elif dp_auto_lock_time and dp_auto_lock_time.value:
             delay = int(dp_auto_lock_time.value)
         else:
             _LOGGER.debug(

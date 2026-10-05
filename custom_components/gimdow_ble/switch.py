@@ -302,6 +302,11 @@ async def async_setup_entry(
 ) -> None:
     """Set up the Gimdow BLE switches."""
     data = entry.runtime_data
+    from .ha_controls import GimdowBLEHAAutoLockSwitch, supports_ha_auto_lock
+
+    if supports_ha_auto_lock(data.device):
+        async_add_entities([GimdowBLEHAAutoLockSwitch(data)])
+        return
     door_sensor = entry.options.get(CONF_DOOR_SENSOR)
     mappings = get_mapping_by_device(data.device)
     entities: list[GimdowBLESwitch | GimdowBLEVirtualAutoLockSwitch] = []

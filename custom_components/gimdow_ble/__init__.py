@@ -65,7 +65,14 @@ async def async_setup_entry(hass: HomeAssistant, entry: GimdowBLEConfigEntry) ->
             f"Could not find Gimdow BLE device with address {address}"
         )
     manager = HASSGimdowBLEDeviceManager(hass, entry.data.copy())
-    device = GimdowBLEDevice(manager, ble_device)
+    service_info = bluetooth.async_last_service_info(
+        hass, address.upper(), connectable=True
+    )
+    device = GimdowBLEDevice(
+        manager,
+        ble_device,
+        advertisement_data=service_info.advertisement if service_info else None,
+    )
     await device.initialize()
     product_info = get_device_product_info(device)
 

@@ -54,13 +54,29 @@ class GimdowBLELockMapping:
     description: LockEntityDescription
     force_add: bool = True
     dp_type: GimdowBLEDataPointType | None = None
-    unlock_value: int | bool = True
+    unlock_value: int | bool | bytes = True
     lock_value: int | bool = True
 
 
 GimdowBLECategoryLockMapping = GimdowBLECategoryMapping[GimdowBLELockMapping]
 
 mapping: dict[str, GimdowBLECategoryLockMapping] = {
+    "ms": GimdowBLECategoryLockMapping(
+        products={
+            "uueg45qu": [
+                GimdowBLELockMapping(
+                    lock_dp_id=46,
+                    unlock_dp_id=6,
+                    state_dp_id=47,
+                    description=LockEntityDescription(key="lock", name=None),
+                    # Tuya's legacy DP6 format: unlock action + member ID 1.
+                    # https://developer.tuya.com/en/docs/iot/ble?id=K9ow3vcpn71ua
+                    unlock_value=b"\x01\x01",
+                    lock_value=True,
+                ),
+            ],
+        },
+    ),
     "jtmspro": GimdowBLECategoryLockMapping(
         products={
             "rlyxv7pe": [  # Gimdow Smart Lock
@@ -126,6 +142,7 @@ class GimdowBLELock(GimdowBLEEntity, LockEntity):
                 unlock_value=lock_mapping.unlock_value,
                 get_auto_lock=lambda: data.virtual_auto_lock,
                 has_door_sensor=data.has_door_sensor,
+                get_auto_lock_delay=lambda: data.ha_auto_lock_delay,
             ),
             on_state_change=self.async_write_ha_state,
         )
@@ -236,7 +253,14 @@ class GimdowBLELock(GimdowBLEEntity, LockEntity):
             self._lock_manager.on_connected()
         self._was_connected = is_connected
 
-        locked = self.is_locked
+        # A fresh physical-position push must reach the state machine even
+        # after a command timeout. is_locked deliberately masks the cached
+        # position in that state; passing it here would keep us unknown forever.
+        # Battery/configuration updates must not clear the timeout using cache.
+        if self._mapping.state_dp_id in self._coordinator.updated_datapoint_ids:
+            locked = self._device.get_lock_state(self._mapping.state_dp_id)
+        else:
+            locked = self.is_locked
         self._lock_manager.on_coordinator_update(locked)
         did_change, changed_by = self._lock_manager.update_attribution(
             locked, self._last_is_locked
