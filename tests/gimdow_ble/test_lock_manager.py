@@ -6,12 +6,12 @@ Covers:
   transition timeout — zero no-op, positive task, fires unknown, cancel, coordinator cancel
   on_connected      — transition reset, first-boot None guard, dedup, all strategies
   cleanup (M5)      — cancels all background tasks
-  auto-lock timer   — N4 property, N7 none-guard, start/stop lifecycle
+  auto-lock timer   — N4 property, arms in unknown state (N7 guard removed), start/stop lifecycle
   attribution (S7)  — update_attribution all sources; None-guard short-circuit
   double-command (S6) — echo timeout → TIMEOUT_UNKNOWN; CancelledError; exception
   coordinator update  — transition flag clearing; safety-net timer restart
   door changed        — pending intent, auto-lock timer, state tracking
-  auto-lock callback  — already locked skip; not locked fires lock()
+  auto-lock callback  — already locked skip; not locked fires lock(); unknown follows the strategy
   setting callbacks   — on_auto_lock_setting_changed / on_auto_lock_time_changed
   PendingLockIntent   — set/clear/bool/should_auto_execute
 """
@@ -221,10 +221,32 @@ class TestAutoLockTimer:
             mock_acl.assert_not_called()
         assert mgr._auto_lock_timer is None
 
-    def test_not_started_when_is_locked_none(self) -> None:
-        """start_auto_lock_timer skips when lock state is None (N7)."""
+    def test_started_when_is_locked_none(self) -> None:
+        """Unknown lock state is not a barrier: the strategy decides at fire time."""
         mgr, _, _ = _make_manager(virtual_auto_lock=True, is_locked_return=None)
-        mgr.on_door_changed(False)  # mark door state known
+        with patch(
+            "custom_components.gimdow_ble.gimdow_ble.lock_manager.async_call_later"
+        ) as mock_acl:
+            mock_acl.return_value = MagicMock()
+            mgr.on_door_changed(False)  # marks door known and arms the timer
+            mock_acl.assert_called_once()
+        assert mgr._auto_lock_timer is not None
+
+    def test_started_in_timeout_unknown_even_with_stale_locked_dp(self) -> None:
+        mgr, _, _ = _make_manager(virtual_auto_lock=True, is_locked_return=True)
+        mgr._door_state_known = True
+        mgr._transition_state = LockTransitionState.TIMEOUT_UNKNOWN
+        with patch(
+            "custom_components.gimdow_ble.gimdow_ble.lock_manager.async_call_later"
+        ) as mock_acl:
+            mock_acl.return_value = MagicMock()
+            mgr.start_auto_lock_timer()
+            mock_acl.assert_called_once()
+
+    def test_not_started_while_locking(self) -> None:
+        mgr, _, _ = _make_manager(virtual_auto_lock=True, is_locked_return=None)
+        mgr._door_state_known = True
+        mgr._transition_state = LockTransitionState.LOCKING
         with patch(
             "custom_components.gimdow_ble.gimdow_ble.lock_manager.async_call_later"
         ) as mock_acl:
@@ -466,6 +488,31 @@ class TestUpdateAttribution:
         mgr._pending_action_source = ACTION_SOURCE_AUTO
         mgr.update_attribution(current_is_locked=False, last_is_locked=True)
         assert mgr._pending_action_source is None
+
+    def test_auto_source_consumed_on_unknown_to_locked(self) -> None:
+        """Auto-lock resolving unknown -> locked must not leak the AUTO source."""
+        mgr, _, _ = _make_manager()
+        mgr._pending_action_source = ACTION_SOURCE_AUTO
+        changed, by = mgr.update_attribution(
+            current_is_locked=True, last_is_locked=None
+        )
+        assert (changed, by) == (True, "Auto Lock")
+        assert mgr._pending_action_source is None
+
+        # The next real transition is a manual one.
+        changed, by = mgr.update_attribution(
+            current_is_locked=False, last_is_locked=True
+        )
+        assert (changed, by) == (True, "Manual")
+
+    def test_auto_source_not_consumed_on_unknown_to_unlocked(self) -> None:
+        mgr, _, _ = _make_manager()
+        mgr._pending_action_source = ACTION_SOURCE_AUTO
+        changed, by = mgr.update_attribution(
+            current_is_locked=False, last_is_locked=None
+        )
+        assert (changed, by) == (False, None)
+        assert mgr._pending_action_source == ACTION_SOURCE_AUTO
 
 
 # ---------------------------------------------------------------------------
@@ -763,6 +810,140 @@ class TestAutoLockCallback:
         await mgr._auto_lock_callback(None)
 
         assert mgr._auto_lock_timer is None
+
+
+class TestAutoLockCallbackUnknownState:
+    """Auto-lock fired in unknown state follows the configured strategy."""
+
+    async def test_double_on_action_double_commands_lock(self) -> None:
+        mgr, _, device = _make_manager(
+            unknown_state_action=UNKNOWN_STATE_ACTION_DOUBLE_ON_ACTION,
+            is_locked_return=None,
+        )
+
+        await mgr._auto_lock_callback(None)
+        await mgr._resolution_task
+
+        assert device.send_command_wait_state_echo.await_count == 2
+        for call in device.send_command_wait_state_echo.await_args_list:
+            assert call.args[0] == 46  # lock DP
+
+    @pytest.mark.parametrize(
+        "action",
+        [UNKNOWN_STATE_ACTION_CONFIRM_LAST, UNKNOWN_STATE_ACTION_FORCE_LOCK_TWICE],
+    )
+    async def test_reconnect_strategies_send_nothing_and_drop_source(
+        self, action: str
+    ) -> None:
+        mgr, _, device = _make_manager(unknown_state_action=action, is_locked_return=None)
+
+        await mgr._auto_lock_callback(None)
+
+        assert mgr._resolution_task is None
+        device.send_command_wait_state_echo.assert_not_awaited()
+        device.send_control_datapoint.assert_not_awaited()
+        assert mgr._pending_action_source is None
+
+    async def test_timeout_unknown_with_stale_locked_dp_still_fires(self) -> None:
+        mgr, _, device = _make_manager(
+            unknown_state_action=UNKNOWN_STATE_ACTION_DOUBLE_ON_ACTION,
+            is_locked_return=True,  # stale raw DP47
+        )
+        mgr._transition_state = LockTransitionState.TIMEOUT_UNKNOWN
+
+        await mgr._auto_lock_callback(None)
+        await mgr._resolution_task
+
+        assert device.send_command_wait_state_echo.await_count == 2
+
+    async def test_fire_during_running_resolution_is_ignored_and_source_dropped(
+        self,
+    ) -> None:
+        mgr, _, device = _make_manager(
+            unknown_state_action=UNKNOWN_STATE_ACTION_DOUBLE_ON_ACTION,
+            is_locked_return=None,
+        )
+        mgr._resolution_task = asyncio.create_task(asyncio.sleep(10))
+        try:
+            await mgr._auto_lock_callback(None)
+
+            device.send_command_wait_state_echo.assert_not_awaited()
+            assert mgr._pending_action_source is None
+            # A later manual None -> unlocked must not be mislabeled.
+            changed, by = mgr.update_attribution(
+                current_is_locked=False, last_is_locked=None
+            )
+            assert (changed, by) == (False, None)
+        finally:
+            mgr._resolution_task.cancel()
+            await asyncio.gather(mgr._resolution_task, return_exceptions=True)
+
+    async def test_door_open_pending_relock_still_double_commands(self) -> None:
+        """Door-close pending lock stays explicit under every strategy."""
+        mgr, _, device = _make_manager(
+            unknown_state_action=UNKNOWN_STATE_ACTION_CONFIRM_LAST,
+            is_locked_return=None,
+        )
+        mgr._pending.set(LockBlockedReason.DOOR_OPEN_PENDING)
+
+        await mgr.lock()
+        await mgr._resolution_task
+
+        assert device.send_command_wait_state_echo.await_count == 2
+
+    async def test_manual_lock_in_timeout_unknown_keeps_raw_read(self) -> None:
+        """lock() must not use the entity-level unknown, or it cancels recovery."""
+        mgr, _, device = _make_manager(
+            unknown_state_action=UNKNOWN_STATE_ACTION_CONFIRM_LAST,
+            is_locked_return=False,  # raw DP47 says unlocked
+        )
+        mgr._transition_state = LockTransitionState.TIMEOUT_UNKNOWN
+        recovery = asyncio.create_task(asyncio.sleep(10))
+        mgr._resolution_task = recovery
+        try:
+            await mgr.lock()
+
+            assert not recovery.cancelled()
+            device.send_control_datapoint.assert_awaited_once()
+        finally:
+            recovery.cancel()
+            await asyncio.gather(recovery, return_exceptions=True)
+
+
+class TestArmAutoLockIfIdle:
+    def test_arms_when_idle_and_door_known(self) -> None:
+        mgr, _, _ = _make_manager(virtual_auto_lock=True, is_locked_return=None)
+        mgr._door_state_known = True
+        with patch(
+            "custom_components.gimdow_ble.gimdow_ble.lock_manager.async_call_later"
+        ) as mock_acl:
+            mock_acl.return_value = MagicMock()
+            mgr.arm_auto_lock_if_idle()
+            mock_acl.assert_called_once()
+        assert mgr._auto_lock_timer is not None
+
+    def test_does_not_restart_running_timer(self) -> None:
+        mgr, _, _ = _make_manager(virtual_auto_lock=True, is_locked_return=None)
+        mgr._door_state_known = True
+        running = MagicMock()
+        mgr._auto_lock_timer = running
+        with patch(
+            "custom_components.gimdow_ble.gimdow_ble.lock_manager.async_call_later"
+        ) as mock_acl:
+            mgr.arm_auto_lock_if_idle()
+            mock_acl.assert_not_called()
+        assert mgr._auto_lock_timer is running
+
+    def test_skipped_when_door_state_unknown(self) -> None:
+        mgr, _, _ = _make_manager(virtual_auto_lock=True, is_locked_return=None)
+        with patch(
+            "custom_components.gimdow_ble.gimdow_ble.lock_manager.async_call_later"
+        ) as mock_acl, patch(
+            "custom_components.gimdow_ble.gimdow_ble.lock_manager.pn_async_create"
+        ) as mock_pn:
+            mgr.arm_auto_lock_if_idle()
+            mock_acl.assert_not_called()
+            mock_pn.assert_not_called()  # no "no door sensor" notification at startup
 
 
 # ---------------------------------------------------------------------------

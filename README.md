@@ -155,6 +155,7 @@ Automatically re-locks the door after a configurable delay following an unlock. 
 | Enabled | Unlocked, door closed | Countdown starts; re-locks after the configured delay. |
 | Enabled | Unlocked, door left open | Countdown runs. If the timer fires while the door is still open, lock enters **Jammed** state (open-door alert). Re-locks instantly when the door closes. |
 | Enabled | Manually locked while open | Lock enters **Jammed** state. Re-locks instantly when the door closes. |
+| Enabled | Lock state Unknown | Countdown still runs (Unknown is never a reason to skip it). When it expires, the lock acts per the [Unknown State Strategy](#unknown-state-strategy). |
 
 The auto-lock delay is set via the **Auto-Lock Delay** number entity (in seconds).
 
@@ -170,12 +171,14 @@ Determines how the integration recovers lock position after a BLE reconnect or r
 
 | Strategy | Trigger | Behaviour |
 |----------|---------|-----------|
-| **Confirm Last** *(default)* | Every BLE reconnect | Re-sends the last known state (locked or unlocked) twice, then waits for a single device acknowledgement. Worst-case ~22 s. If no prior state is recorded, stays Unknown until the device reports. |
-| **Double on Action** | When a lock/unlock command is issued while state is Unknown | Sends the requested command twice with a single echo wait. Use when you prefer not to touch the lock automatically on reconnect. |
+| **Confirm Last** | Every BLE reconnect | Re-sends the last known state (locked or unlocked) twice, then waits for a single device acknowledgement. Worst-case ~22 s. If no prior state is recorded, stays Unknown until the device reports. |
+| **Double on Action** *(default)* | When a lock/unlock command is issued (or the auto-lock timer expires) while state is Unknown | Sends the requested command twice with a single echo wait. Use when you prefer not to touch the lock automatically on reconnect. |
 | **Force Lock Twice** | Every BLE reconnect | Sends the lock command twice unconditionally, then waits for echo. Use only when the lock is never in a position where extending the bolt is unsafe. |
 
 > **Confirm Last** and **Force Lock Twice** fire automatically on every reconnect.
-> **Double on Action** fires only when you issue a lock or unlock command from HA while state is Unknown.
+> **Double on Action** fires only when you issue a lock or unlock command from HA while state is Unknown,
+> or when the [Virtual Auto-Lock](#virtual-auto-lock) timer expires while state is Unknown.
+> With the other two strategies an auto-lock that expires while state is Unknown sends nothing extra; their reconnect logic owns the resolution.
 
 ### State Transition Timeout
 

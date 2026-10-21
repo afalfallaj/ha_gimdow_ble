@@ -234,6 +234,10 @@ class GimdowBLELock(GimdowBLEEntity, LockEntity):
         is_connected = self._coordinator.connected
         if is_connected and not self._was_connected:
             self._lock_manager.on_connected()
+            # Arm here, not in on_connected(): that also fires on every BLE
+            # handshake. This flip covers startup and reconnects where DP47 was
+            # cleared, so auto-lock still runs while the state is unknown.
+            self._lock_manager.arm_auto_lock_if_idle()
         self._was_connected = is_connected
 
         locked = self.is_locked

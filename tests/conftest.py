@@ -228,6 +228,7 @@ sys.modules.update(
         "homeassistant.helpers.entity": MagicMock(),
         "homeassistant.helpers.entity_platform": MagicMock(),
         "homeassistant.helpers.restore_state": _ha_restore_state,
+        "homeassistant.helpers.aiohttp_client": MagicMock(),
         "homeassistant.helpers.dispatcher": MagicMock(),
         "homeassistant.helpers.device_registry": MagicMock(),
         # components — top-level and deep submodules

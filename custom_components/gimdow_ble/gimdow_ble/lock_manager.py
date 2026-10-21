@@ -230,6 +230,16 @@ class GimdowBLELockManager:
     def _resolution_active(self) -> bool:
         return bool(self._resolution_task and not self._resolution_task.done())
 
+    def _lock_state(self) -> bool | None:
+        """Lock state as the entity shows it: None while TIMEOUT_UNKNOWN.
+
+        Auto-lock only. ``lock()``/``unlock()`` keep the raw DP47 read so a manual
+        command during TIMEOUT_UNKNOWN doesn't cancel the recovery task.
+        """
+        if self._transition_state == LockTransitionState.TIMEOUT_UNKNOWN:
+            return None
+        return self._device.get_lock_state(self._config.state_dp_id)
+
     # ------------------------------------------------------------------
     # External event hooks (called by HA entity dispatchers)
     # ------------------------------------------------------------------
@@ -390,6 +400,15 @@ class GimdowBLELockManager:
         """Return (True, changed_by) when a state transition occurs, else (False, None)."""
         if current_is_locked is None:
             return False, None
+        if (
+            last_is_locked is None
+            and current_is_locked is True
+            and self._pending_action_source == ACTION_SOURCE_AUTO
+        ):
+            # Auto-lock resolved an unknown state to locked. Consume the source so
+            # it can't leak onto the next (e.g. manual) transition.
+            self._pending_action_source = None
+            return True, "Auto Lock"
         if last_is_locked is not None and current_is_locked != last_is_locked:
             if self._pending_action_source == ACTION_SOURCE_AUTO:
                 changed_by: str | None = "Auto Lock"
@@ -559,16 +578,17 @@ class GimdowBLELockManager:
                     "[%s] Unknown-state task already in progress. Ignoring.",
                     self._device.address,
                 )
+                self._drop_auto_action_source()
                 return
 
         action = self._config.unknown_state_action
 
-        # An explicit lock request (door-close pending or auto-lock) must never be
-        # silently dropped, regardless of strategy. The double-command covers both
-        # starting states and will re-set DOOR_OPEN_PENDING if the door is still open.
-        is_explicit_lock = target_lock and (
-            self._pending.active or self._pending_action_source == ACTION_SOURCE_AUTO
-        )
+        # An explicit lock request (door-close pending) must never be silently
+        # dropped, regardless of strategy. The double-command covers both starting
+        # states and will re-set DOOR_OPEN_PENDING if the door is still open.
+        # Auto-lock is deliberately NOT explicit: it follows the configured strategy
+        # like any other command (see AGENTS.md "Auto-Lock & Unknown State").
+        is_explicit_lock = target_lock and self._pending.active
 
         if action == UNKNOWN_STATE_ACTION_DOUBLE_ON_ACTION or is_explicit_lock:
             _LOGGER.warning(
@@ -588,6 +608,16 @@ class GimdowBLELockManager:
                 self._device.address,
                 action,
             )
+            self._drop_auto_action_source()
+
+    def _drop_auto_action_source(self) -> None:
+        """Forget an AUTO source whose command was never dispatched.
+
+        Otherwise it would leak onto the next real transition and mislabel a
+        manual operation as "Auto Lock".
+        """
+        if self._pending_action_source == ACTION_SOURCE_AUTO:
+            self._pending_action_source = None
 
     async def _double_command_to_state(self, target_lock: bool) -> None:
         """Drive the lock to target_lock by always running exactly two motor cycles.
@@ -726,7 +756,7 @@ class GimdowBLELockManager:
                 )
             return
 
-        is_locked = self._device.get_lock_state(self._config.state_dp_id)
+        is_locked = self._lock_state()
         _LOGGER.debug(
             "[%s] Auto-lock eval: enabled=%s door_open=%s is_locked=%s",
             self._device.address,
@@ -737,18 +767,15 @@ class GimdowBLELockManager:
 
         if not self._config.get_auto_lock():
             return
-        if is_locked is None:
-            return
+        # Unknown state (is_locked is None) is deliberately not a barrier: when the
+        # timer fires, the configured unknown-state strategy decides what happens.
         if is_locked:
             _LOGGER.debug(
                 "[%s] Auto-lock: already locked — timer not started.",
                 self._device.address,
             )
             return
-        if self._transition_state in (
-            LockTransitionState.LOCKING,
-            LockTransitionState.TIMEOUT_UNKNOWN,
-        ):
+        if self._transition_state == LockTransitionState.LOCKING:
             _LOGGER.debug(
                 "[%s] Auto-lock: transition in progress (%s) — timer not started.",
                 self._device.address,
@@ -785,7 +812,7 @@ class GimdowBLELockManager:
     async def _auto_lock_callback(self, _now) -> None:
         """Fired when the auto-lock timer expires."""
         self._auto_lock_timer = None
-        is_locked = self._device.get_lock_state(self._config.state_dp_id)
+        is_locked = self._lock_state()
         if is_locked:
             _LOGGER.debug(
                 "[%s] Auto-lock: already locked — skipping.", self._device.address
@@ -793,7 +820,25 @@ class GimdowBLELockManager:
             return
         _LOGGER.debug("[%s] Auto-lock: timer expired → locking.", self._device.address)
         self._pending_action_source = ACTION_SOURCE_AUTO
+        if is_locked is None:
+            # Unknown (reconnect or timed-out transition): hand straight to the
+            # configured strategy. lock() is bypassed because it reads the raw,
+            # possibly stale DP47 and would skip or mis-route a TIMEOUT_UNKNOWN.
+            await self._handle_unknown_state(target_lock=True, user_initiated=False)
+            return
         await self.lock()
+
+    def arm_auto_lock_if_idle(self) -> None:
+        """Arm the auto-lock timer unless one is already running.
+
+        Called by the HA entity on the coordinator's disconnected→connected flip
+        (startup / reconnect after DP47 was cleared). Deliberately not part of
+        ``on_connected()``: that also runs on every BLE handshake and would re-arm
+        a failed double-command each time. Skipped while the door state is unknown
+        so startup doesn't raise the "no door sensor" notification.
+        """
+        if self._auto_lock_timer is None and self._door_state_known:
+            self.start_auto_lock_timer()
 
     # ------------------------------------------------------------------
     # Transition Timeout Timer

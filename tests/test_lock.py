@@ -106,3 +106,44 @@ class TestLockAddedToHass:
         await entity.async_added_to_hass()
 
         assert entity._lock_manager._door_state_known is True
+
+
+class TestAutoLockArmingOnConnect:
+    """Auto-lock is armed on the coordinator's connected flip, not on every handshake."""
+
+    @staticmethod
+    def _entity():
+        device = _make_device()
+        device.get_lock_state.return_value = None
+        entity, _ = _make_lock(device)
+        entity.async_write_ha_state = MagicMock()
+        entity._lock_manager.on_connected = MagicMock()
+        entity._lock_manager.arm_auto_lock_if_idle = MagicMock()
+        return entity
+
+    def test_connected_flip_arms_auto_lock(self) -> None:
+        entity = self._entity()
+        entity._coordinator.connected = True
+        entity._was_connected = False
+
+        entity._handle_coordinator_update()
+
+        entity._lock_manager.on_connected.assert_called_once()
+        entity._lock_manager.arm_auto_lock_if_idle.assert_called_once()
+
+    def test_already_connected_does_not_arm_again(self) -> None:
+        entity = self._entity()
+        entity._coordinator.connected = True
+        entity._was_connected = True
+
+        entity._handle_coordinator_update()
+
+        entity._lock_manager.arm_auto_lock_if_idle.assert_not_called()
+
+    def test_ble_handshake_does_not_arm(self) -> None:
+        entity = self._entity()
+
+        entity._on_ble_reconnected()
+
+        entity._lock_manager.on_connected.assert_called_once()
+        entity._lock_manager.arm_auto_lock_if_idle.assert_not_called()

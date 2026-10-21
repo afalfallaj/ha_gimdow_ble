@@ -63,11 +63,27 @@ These findings are confirmed by hardware test results (`test-res.txt`).
 
 ---
 
+## Auto-Lock & Unknown State
+
+The virtual auto-lock (`GimdowBLELockManager.start_auto_lock_timer()`) must treat an unknown lock state as **armed, not blocked**. What the fired timer does is decided by the "action when lock state is unknown" setting, exactly as for any other lock command.
+
+| Rule | Detail |
+|---|---|
+| No unknown guard on the timer | **Do not re-add an `is_locked is None` check (or a `TIMEOUT_UNKNOWN` exclusion) to `start_auto_lock_timer()`.** That guard ("N7") made auto-lock silently do nothing whenever DP47 was unknown, even with Double on Action. Only `LOCKING` (a transition already in flight) and an already-locked lock suppress arming. |
+| Outcome per strategy | When the timer fires with state unknown: **Double on Action** → double lock command. **Confirm Last / Force Lock Twice** → nothing extra is sent; their reconnect resolution owns the unknown state. `is_explicit_lock` in `_handle_unknown_state()` covers **only** a door-close pending lock, not auto-lock. |
+| `_lock_state()` scope | `_lock_state()` (returns `None` during `TIMEOUT_UNKNOWN`, matching the entity) is used by the auto-lock path only. `lock()`/`unlock()` deliberately keep the raw DP47 read: a manual Lock during `TIMEOUT_UNKNOWN` must not cancel the in-flight `_attempt_timeout_recovery` task and then be dropped. |
+| Where arming happens | Doors, setting/delay changes, `unlock()`, and `arm_auto_lock_if_idle()` from the coordinator's disconnected→connected flip in `lock.py` (startup, and reconnects where DP47 was cleared). **Not** from `on_connected()`: it also runs on every BLE handshake (`_on_ble_reconnected`) and would re-arm a failed double-command each time. |
+| Safety net stays narrow | The `on_coordinator_update()` safety net stays at `is_locked is False`. Widening it to unknown re-arms the timer on every DP push and loops arm → fire → ignore under Confirm Last / Force Lock Twice. |
+| Attribution | `_auto_lock_callback` sets `_pending_action_source = AUTO`. If the command is not dispatched (strategy ignore, resolution already running) the source is cleared by `_drop_auto_action_source()`; `update_attribution()` consumes it on `None → locked`. Otherwise a later manual operation is mislabeled "Auto Lock". |
+
+---
+
 ## CI/CD Files
 
 | File | Purpose |
 |---|---|
 | `.github/workflows/tag_and_release.yml` | Auto-generates tags, bumps manifests, and publishes GitHub Releases on push to `main` or `dev` |
-| `.github/workflows/validate.yml` | Runs `hassfest` and HACS validation (`hacs/action`) on push, PR, a daily schedule, and manual dispatch |
 
-`hacs.json`'s `"homeassistant"` minimum-version floor is **manually maintained** — release-please and the CI workflows above never touch it. Bump it whenever a change starts relying on a newer HA API (e.g. it was raised to `2025.8.0` because `config_flow.py` uses `OptionsFlowWithReload`, added in that HA release). A stale floor doesn't fail CI; it just lets HACS install the integration onto HA versions where an import silently breaks.
+There is currently no CI workflow running `hassfest` or HACS validation (`validate.yml` was removed); validate manually before a release if a change touches `manifest.json`, `hacs.json`, or translations.
+
+`hacs.json`'s `"homeassistant"` minimum-version floor is **manually maintained** — `tag_and_release.yml` never touches it. Bump it whenever a change starts relying on a newer HA API (e.g. it was raised to `2025.8.0` because `config_flow.py` uses `OptionsFlowWithReload`, added in that HA release). A stale floor doesn't fail CI; it just lets HACS install the integration onto HA versions where an import silently breaks.
