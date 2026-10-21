@@ -19,7 +19,7 @@ from custom_components.gimdow_ble.gimdow_ble import GimdowBLEDataPointType
 from custom_components.gimdow_ble.switch import (
     GimdowBLESwitchMapping,
     GimdowBLEVirtualAutoLockSwitch,
-    _VirtualAutoLockExtraData,
+    _SwitchExtraData,
 )
 
 
@@ -63,12 +63,12 @@ class TestVirtualAutoLockExtraDataRoundTrip:
 
     @pytest.mark.parametrize("is_on", [True, False])
     def test_round_trips(self, is_on: bool) -> None:
-        original = _VirtualAutoLockExtraData(is_on)
-        restored = _VirtualAutoLockExtraData.from_dict(original.as_dict())
-        assert restored == _VirtualAutoLockExtraData(is_on)
+        original = _SwitchExtraData(is_on)
+        restored = _SwitchExtraData.from_dict(original.as_dict())
+        assert restored == _SwitchExtraData(is_on)
 
     def test_from_dict_missing_key_returns_none(self) -> None:
-        assert _VirtualAutoLockExtraData.from_dict({}) is None
+        assert _SwitchExtraData.from_dict({}) is None
 
 
 class TestVirtualAutoLockSwitchRestore:
@@ -77,7 +77,7 @@ class TestVirtualAutoLockSwitchRestore:
         data = MagicMock()
         data.virtual_auto_lock = False
         entity = _make_switch(device, data)
-        entity._stub_last_extra_data = _VirtualAutoLockExtraData(True)
+        entity._stub_last_extra_data = _SwitchExtraData(True)
 
         await entity.async_added_to_hass()
 
@@ -91,7 +91,7 @@ class TestVirtualAutoLockSwitchRestore:
         data = MagicMock()
         data.virtual_auto_lock = True
         entity = _make_switch(device, data)
-        entity._stub_last_extra_data = _VirtualAutoLockExtraData(False)
+        entity._stub_last_extra_data = _SwitchExtraData(False)
 
         await entity.async_added_to_hass()
 
@@ -118,7 +118,7 @@ class TestVirtualAutoLockSwitchRestore:
         entity._product = SimpleNamespace(
             name="Other", manufacturer="Gimdow", is_lock=False
         )
-        entity._stub_last_extra_data = _VirtualAutoLockExtraData(True)
+        entity._stub_last_extra_data = _SwitchExtraData(True)
 
         await entity.async_added_to_hass()
 
