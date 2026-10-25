@@ -10,7 +10,8 @@ Covers:
   attribution (S7)  — update_attribution all sources; None-guard short-circuit
   double-command (S6) — echo timeout → TIMEOUT_UNKNOWN; CancelledError; exception
   coordinator update  — transition flag clearing; safety-net timer restart
-  door changed        — pending intent, auto-lock timer, state tracking
+  door changed        — pending intent, auto-lock timer, state tracking,
+                        missed DP47 on manual unlock (door opens while locked)
   auto-lock callback  — already locked skip; not locked fires lock(); unknown follows the strategy
   setting callbacks   — on_auto_lock_setting_changed / on_auto_lock_time_changed
   PendingLockIntent   — set/clear/bool/should_auto_execute
@@ -30,6 +31,8 @@ from custom_components.gimdow_ble.gimdow_ble.lock_manager import (
     LockTransitionState,
     PendingLockIntent,
 )
+from custom_components.gimdow_ble.gimdow_ble.datapoints import GimdowBLEDataPoints
+from custom_components.gimdow_ble.gimdow_ble.const import GimdowBLEDataPointType
 from custom_components.gimdow_ble.const import (
     ACTION_SOURCE_AUTO,
     ACTION_SOURCE_HA,
@@ -745,6 +748,133 @@ class TestOnDoorChanged:
         ):
             mgr.on_door_changed(is_open=False)
         assert mgr._is_door_open is False
+
+
+class TestDoorOpenAssumesManualUnlock:
+    """Door closed → open while DP47 says locked: the DP47 push was missed.
+
+    The bolt blocks the door, so the lock must have been unlocked by hand. The
+    local DP47 value is corrected (nothing is sent to the lock) so auto-lock can
+    re-lock it once the door closes.
+    """
+
+    @staticmethod
+    def _manager_with_real_dp47(locked: bool):
+        mgr, hass, device = _make_manager(virtual_auto_lock=True, has_door_sensor=True)
+        dps = GimdowBLEDataPoints(AsyncMock())
+        # DP47 True = unlocked
+        dps._update_from_device(47, 0.0, 0, GimdowBLEDataPointType.DT_BOOL, not locked)
+        device.datapoints = dps
+        device.get_lock_state.side_effect = lambda dp_id: (
+            None if dps[dp_id] is None else not bool(dps[dp_id].value)
+        )
+        mgr._last_known_state = locked
+        return mgr, hass, device, dps
+
+    def test_open_while_locked_assumes_unlocked(self) -> None:
+        mgr, _, device, dps = self._manager_with_real_dp47(locked=True)
+        mgr.on_door_changed(False)  # initial door state (door closed)
+
+        with patch(
+            "custom_components.gimdow_ble.gimdow_ble.lock_manager.async_call_later"
+        ):
+            mgr.on_door_changed(True)
+
+        assert dps[47].value is True  # unlocked
+        assert device.get_lock_state(47) is False
+        assert mgr._last_known_state is False
+        device.send_control_datapoint.assert_not_awaited()
+        device.send_command_wait_state_echo.assert_not_awaited()
+
+    def test_open_while_locked_arms_auto_lock(self) -> None:
+        mgr, _, _, _ = self._manager_with_real_dp47(locked=True)
+        mgr.on_door_changed(False)
+
+        with patch(
+            "custom_components.gimdow_ble.gimdow_ble.lock_manager.async_call_later"
+        ) as call_later:
+            mgr.on_door_changed(True)
+
+        call_later.assert_called_once()
+        assert mgr.auto_lock_timer_active
+
+    async def test_auto_lock_after_close_sends_lock_never_unlock(self) -> None:
+        mgr, _, device, _ = self._manager_with_real_dp47(locked=True)
+        mgr.on_door_changed(False)
+        with patch(
+            "custom_components.gimdow_ble.gimdow_ble.lock_manager.async_call_later"
+        ):
+            mgr.on_door_changed(True)
+            mgr.on_door_changed(False)
+
+        await mgr._auto_lock_callback(None)
+
+        device.send_control_datapoint.assert_awaited()
+        for call in device.send_control_datapoint.await_args_list:
+            assert call.args[0] == 46  # lock DP, never the unlock DP
+
+    def test_first_door_event_does_not_touch_state(self) -> None:
+        mgr, _, _, dps = self._manager_with_real_dp47(locked=True)
+        assert not mgr._door_state_known
+
+        with patch(
+            "custom_components.gimdow_ble.gimdow_ble.lock_manager.async_call_later"
+        ):
+            mgr.on_door_changed(True)
+
+        assert dps[47].value is False  # still locked
+        assert mgr._last_known_state is True
+
+    def test_open_while_unlocked_is_unchanged(self) -> None:
+        mgr, _, _, dps = self._manager_with_real_dp47(locked=False)
+        mgr.on_door_changed(False)
+        ts = dps[47].timestamp
+
+        with patch(
+            "custom_components.gimdow_ble.gimdow_ble.lock_manager.async_call_later"
+        ):
+            mgr.on_door_changed(True)
+
+        assert dps[47].value is True
+        assert dps[47].timestamp == ts
+
+    def test_unknown_state_is_left_to_strategy(self) -> None:
+        mgr, _, _, dps = self._manager_with_real_dp47(locked=True)
+        dps.clear(47)
+        mgr._last_known_state = None
+        mgr.on_door_changed(False)
+
+        with patch(
+            "custom_components.gimdow_ble.gimdow_ble.lock_manager.async_call_later"
+        ):
+            mgr.on_door_changed(True)
+
+        assert dps[47] is None
+        assert mgr._last_known_state is None
+
+    def test_timeout_unknown_is_left_to_strategy(self) -> None:
+        mgr, _, _, dps = self._manager_with_real_dp47(locked=True)
+        mgr.on_door_changed(False)
+        mgr._transition_state = LockTransitionState.TIMEOUT_UNKNOWN
+
+        with patch(
+            "custom_components.gimdow_ble.gimdow_ble.lock_manager.async_call_later"
+        ):
+            mgr.on_door_changed(True)
+
+        assert dps[47].value is False  # untouched
+
+    def test_late_real_dp47_overwrites_assumed_value(self) -> None:
+        mgr, _, _, dps = self._manager_with_real_dp47(locked=True)
+        mgr.on_door_changed(False)
+        with patch(
+            "custom_components.gimdow_ble.gimdow_ble.lock_manager.async_call_later"
+        ):
+            mgr.on_door_changed(True)
+
+        dps._update_from_device(47, 1.0, 0, GimdowBLEDataPointType.DT_BOOL, False)
+
+        assert dps[47].value is False  # device truth wins
 
 
 # ---------------------------------------------------------------------------

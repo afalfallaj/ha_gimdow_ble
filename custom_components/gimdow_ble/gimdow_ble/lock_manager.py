@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import time
 from dataclasses import dataclass
 from enum import Enum
 from typing import TYPE_CHECKING, Callable
@@ -247,8 +248,11 @@ class GimdowBLELockManager:
     def on_door_changed(self, is_open: bool) -> None:
         """Door sensor state changed."""
         prev = self._is_door_open
+        prev_known = self._door_state_known
         self._is_door_open = is_open
         self._door_state_known = True
+        if is_open and prev_known and not prev:
+            self._assume_unlocked_if_reported_locked()
         pn_async_dismiss(
             self._hass,
             f"gimdow_ble_autolock_no_sensor_{self._device.address}",
@@ -290,6 +294,34 @@ class GimdowBLELockManager:
         # door-close (below path), so the net UX effect is: auto-lock countdown
         # runs from the last door-close event. This is intentional — do not remove.
         self.start_auto_lock_timer()
+
+    def _assume_unlocked_if_reported_locked(self) -> None:
+        """Door went closed → open while DP47 still says locked.
+
+        The bolt blocks the door, so it must have been unlocked by hand and the
+        DP47 push was missed (seen on hardware: the echo sometimes never arrives,
+        or arrives late). Without this, auto-lock bails out with "already locked"
+        and the lock is left open after the door closes.
+
+        Only the local DP47 value is corrected, through the same path as a
+        device push; nothing is sent to the lock. The worst case for a false
+        "door open" reading is one extra lock command to an already locked lock.
+        A real DP47 push arriving later overwrites the assumed value.
+        """
+        if self._lock_state() is not True:
+            return
+        state_dp = self._device.datapoints[self._config.state_dp_id]
+        if not state_dp:
+            return
+        _LOGGER.warning(
+            "[%s] Door opened while lock reported LOCKED → assuming manual "
+            "unlock (DP%s not received).",
+            self._device.address,
+            self._config.state_dp_id,
+        )
+        # DP47 True = unlocked (see GimdowBLEDevice.get_lock_state)
+        state_dp._update_from_device(time.time(), state_dp.flags, state_dp.type, True)
+        self._last_known_state = False
 
     def on_auto_lock_setting_changed(self) -> None:
         """Virtual auto-lock switch toggled."""
