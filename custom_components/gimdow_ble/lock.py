@@ -126,6 +126,7 @@ class GimdowBLELock(GimdowBLEEntity, LockEntity):
                 unlock_value=lock_mapping.unlock_value,
                 get_auto_lock=lambda: data.virtual_auto_lock,
                 has_door_sensor=data.has_door_sensor,
+                on_demand=device.on_demand,
             ),
             on_state_change=self.async_write_ha_state,
         )
