@@ -37,6 +37,16 @@ ACTION_SOURCE_HA: Final = "ha"
 CONF_UNKNOWN_STATE_ACTION: Final = "unknown_state_action"
 CONF_TRANSITION_TIMEOUT: Final = "transition_timeout"
 CONF_AUTO_LOCK_DELAY_FALLBACK: Final = "auto_lock_delay_fallback"
+CONF_CONNECTION_MODE: Final = "connection_mode"
+# persistent: hold the BLE link open (keep-alive), instant state on manual use.
+# on_demand: connect only for commands / periodic refresh (battery saver), the
+# way the stock Tuya gateway treats this lock.
+CONNECTION_MODE_PERSISTENT: Final = "persistent"
+CONNECTION_MODE_ON_DEMAND: Final = "on_demand"
+DEFAULT_CONNECTION_MODE: Final = CONNECTION_MODE_PERSISTENT
+# On-demand mode: periodic status refresh (connect + pair; the lock then pushes
+# battery and other status DPs).
+ON_DEMAND_REFRESH_INTERVAL: Final = 60 * 60
 DEFAULT_AUTO_LOCK_DELAY_FALLBACK: Final = 30
 UNKNOWN_STATE_ACTION_CONFIRM_LAST: Final = "confirm_last"
 UNKNOWN_STATE_ACTION_DOUBLE_ON_ACTION: Final = "double_on_action"
@@ -50,6 +60,7 @@ OPTIONS_ONLY_KEYS: Final = frozenset(
         CONF_UNKNOWN_STATE_ACTION,
         CONF_TRANSITION_TIMEOUT,
         CONF_AUTO_LOCK_DELAY_FALLBACK,
+        CONF_CONNECTION_MODE,
     }
 )
 

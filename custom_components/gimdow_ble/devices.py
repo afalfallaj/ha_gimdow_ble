@@ -3,8 +3,11 @@
 from __future__ import annotations
 import asyncio
 from dataclasses import dataclass
+from datetime import timedelta
 from typing import TYPE_CHECKING, Callable, Generic, TypeVar
 import logging
+
+from homeassistant.components import bluetooth
 
 from homeassistant.components.persistent_notification import (
     async_create as pn_async_create,
@@ -38,6 +41,7 @@ from .const import (
     DEFAULT_AUTO_LOCK_DELAY_FALLBACK,
     DEVICE_DEF_MANUFACTURER,
     DOMAIN,
+    ON_DEMAND_REFRESH_INTERVAL,
     SET_DISCONNECTED_DELAY,
     DEFAULT_UNKNOWN_STATE_ACTION,
 )
@@ -104,22 +108,60 @@ class GimdowBLEEntity(CoordinatorEntity["GimdowBLECoordinator"]):
 class GimdowBLECoordinator(DataUpdateCoordinator[GimdowBLEDevice]):
     """Data coordinator for receiving Gimdow BLE updates."""
 
-    def __init__(self, hass: HomeAssistant, device: GimdowBLEDevice) -> None:
-        """Initialise the coordinator."""
+    def __init__(
+        self, hass: HomeAssistant, device: GimdowBLEDevice, on_demand: bool = False
+    ) -> None:
+        """Initialise the coordinator.
+
+        Persistent mode: reachability follows the BLE link (10-minute grace).
+        On-demand mode: the link is only up for commands and the periodic
+        refresh, so reachability follows the lock's adverts instead (HA's
+        bluetooth unavailable tracking, same 10-minute grace).
+        """
         super().__init__(
             hass,
             _LOGGER,
             name=DOMAIN,
-            update_interval=None,
+            update_interval=(
+                timedelta(seconds=ON_DEMAND_REFRESH_INTERVAL) if on_demand else None
+            ),
         )
         self._device = device
+        self._on_demand = on_demand
         self._disconnected: bool = False
         self._unsub_disconnect: CALLBACK_TYPE | None = None
         self._unregister_callbacks: list[Callable[[], None]] = [
             device.register_connected_callback(self._async_handle_connect),
             device.register_callback(self._async_handle_update),
-            device.register_disconnected_callback(self._async_handle_disconnect),
         ]
+        if on_demand:
+            self._unregister_callbacks.append(
+                bluetooth.async_track_unavailable(
+                    hass,
+                    self._async_handle_unavailable,
+                    device.address,
+                    connectable=True,
+                )
+            )
+        else:
+            self._unregister_callbacks.append(
+                device.register_disconnected_callback(self._async_handle_disconnect)
+            )
+        self._async_handle_disconnect()
+
+    @callback
+    def async_handle_advertisement(self) -> None:
+        """An advert from the lock arrived (on-demand mode: proves reachability)."""
+        if self._on_demand and (
+            self._disconnected or self._unsub_disconnect is not None
+        ):
+            self._async_handle_connect()
+
+    @callback
+    def _async_handle_unavailable(
+        self, _service_info: BluetoothServiceInfoBleak
+    ) -> None:
+        """HA stopped seeing adverts (on-demand mode); start the grace timer."""
         self._async_handle_disconnect()
 
     @property

@@ -40,6 +40,10 @@ from homeassistant.data_entry_flow import FlowHandler, FlowResult
 from .gimdow_ble import SERVICE_UUID
 
 from .const import (
+    CONF_CONNECTION_MODE,
+    CONNECTION_MODE_ON_DEMAND,
+    CONNECTION_MODE_PERSISTENT,
+    DEFAULT_CONNECTION_MODE,
     CONF_ACCESS_ID,
     CONF_ACCESS_SECRET,
     CONF_APP_TYPE,
@@ -243,6 +247,20 @@ def _get_options_schema(hass, defaults: dict | None = None) -> vol.Schema:
         NumberSelectorConfig(min=5, max=300, step=1, mode=NumberSelectorMode.BOX)
     )
 
+    schema[
+        vol.Optional(
+            CONF_CONNECTION_MODE,
+            default=defaults.get(CONF_CONNECTION_MODE, DEFAULT_CONNECTION_MODE),
+        )
+    ] = SelectSelector(
+        SelectSelectorConfig(
+            options=[CONNECTION_MODE_PERSISTENT, CONNECTION_MODE_ON_DEMAND],
+            mode=SelectSelectorMode.DROPDOWN,
+            custom_value=False,
+            translation_key=CONF_CONNECTION_MODE,
+        )
+    )
+
     return vol.Schema(schema)
 
 
@@ -262,6 +280,8 @@ class GimdowBLEOptionsFlow(OptionsFlowWithReload):
                 user_input[CONF_UNKNOWN_STATE_ACTION] = DEFAULT_UNKNOWN_STATE_ACTION
             if CONF_TRANSITION_TIMEOUT not in user_input:
                 user_input[CONF_TRANSITION_TIMEOUT] = 60
+            if CONF_CONNECTION_MODE not in user_input:
+                user_input[CONF_CONNECTION_MODE] = DEFAULT_CONNECTION_MODE
             if CONF_AUTO_LOCK_DELAY_FALLBACK not in user_input:
                 user_input[CONF_AUTO_LOCK_DELAY_FALLBACK] = (
                     DEFAULT_AUTO_LOCK_DELAY_FALLBACK

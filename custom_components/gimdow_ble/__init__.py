@@ -20,6 +20,9 @@ from .gimdow_ble import GimdowBLEDevice
 from .cloud import HASSGimdowBLEDeviceManager
 from .const import (
     CONF_ADAPTER,
+    CONF_CONNECTION_MODE,
+    CONNECTION_MODE_ON_DEMAND,
+    DEFAULT_CONNECTION_MODE,
     CONF_AUTO_LOCK_DELAY_FALLBACK,
     CONF_DOOR_SENSOR,
     DEFAULT_AUTO_LOCK_DELAY_FALLBACK,
@@ -66,10 +69,15 @@ async def async_setup_entry(hass: HomeAssistant, entry: GimdowBLEConfigEntry) ->
         )
     manager = HASSGimdowBLEDeviceManager(hass, entry.data.copy())
     device = GimdowBLEDevice(manager, ble_device)
+    on_demand = (
+        entry.options.get(CONF_CONNECTION_MODE, DEFAULT_CONNECTION_MODE)
+        == CONNECTION_MODE_ON_DEMAND
+    )
+    device.set_on_demand(on_demand)
     await device.initialize()
     product_info = get_device_product_info(device)
 
-    coordinator = GimdowBLECoordinator(hass, device)
+    coordinator = GimdowBLECoordinator(hass, device, on_demand=on_demand)
 
     @callback
     def _async_update_ble(
@@ -85,6 +93,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: GimdowBLEConfigEntry) ->
         device.set_ble_device_and_advertisement_data(
             service_info.device, service_info.advertisement
         )
+        coordinator.async_handle_advertisement()
 
     entry.async_on_unload(
         bluetooth.async_register_callback(

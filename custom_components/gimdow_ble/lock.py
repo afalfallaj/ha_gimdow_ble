@@ -208,7 +208,15 @@ class GimdowBLELock(GimdowBLEEntity, LockEntity):
         The coordinator only marks the device disconnected after 10 minutes, so
         _handle_coordinator_update's False→True flip never fires for brief dropouts.
         This callback fires on *every* successful BLE connection handshake.
+
+        Skipped in on-demand connection mode: there a handshake happens at the
+        start of every command, so treating it as a reconnect would reset the
+        in-flight transition and (with Confirm Last / Force Lock Twice) send a
+        resolution double-command on every connection. Recovery after a real
+        outage still runs from _handle_coordinator_update's False→True flip.
         """
+        if self._device.on_demand:
+            return
         self._lock_manager.on_connected()
         self.async_write_ha_state()
 

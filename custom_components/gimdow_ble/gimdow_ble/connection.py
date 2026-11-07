@@ -49,6 +49,10 @@ class GimdowBLEConnection:
     _MAX_COMMAND_ATTEMPTS = 3  # per-send retries before propagating the error
     _PROXY_CLEAR_DELAY = 2.0  # seconds between command-send retries
     _RECONNECT_BACKOFF_MAX = 60  # 60-second ceiling on exponential backoff
+    # On-demand mode: close the link once nothing has happened for this long.
+    # Long enough to catch the DP47 echo after a full motor cycle (~14 s unlock);
+    # the device itself drops an idle session after 60 s.
+    _IDLE_DISCONNECT_DELAY = 30.0
 
     # ------------------------------------------------------------------
     # Connection state initialiser — call from GimdowBLEDevice.__init__
@@ -79,6 +83,27 @@ class GimdowBLEConnection:
         self._disconnected_callbacks: list[Callable[[], None]] = []
         self._is_paired: bool = False
         self._keep_alive_timer = None
+        # On-demand mode (see set_on_demand): no keep-alive, no auto-reconnect,
+        # link closed after _IDLE_DISCONNECT_DELAY without traffic.
+        self._on_demand: bool = False
+        self._idle_timer: asyncio.TimerHandle | None = None
+        self._idle_disconnecting: bool = False
+
+    def set_on_demand(self, enabled: bool) -> None:
+        """Select the connection model; call before the first connection.
+
+        Persistent (default): the link is kept open with a keep-alive and
+        re-established after any drop, so manual operations are seen at once.
+        On demand: the link is opened only to send something and closed once
+        idle, which is how the stock Tuya gateway treats this (battery
+        powered) lock. Saves battery; manual operations done while no link is
+        up are not seen until the next connection.
+        """
+        self._on_demand = enabled
+
+    @property
+    def on_demand(self) -> bool:
+        return self._on_demand
 
     # ------------------------------------------------------------------
     # Public callback registration
@@ -126,6 +151,7 @@ class GimdowBLEConnection:
             cb()
 
     def _fire_callbacks(self, datapoints: list[GimdowBLEDataPoint]) -> None:
+        self._touch_activity()
         for cb in self._callbacks:
             cb(datapoints)
 
@@ -170,6 +196,7 @@ class GimdowBLEConnection:
 
     async def _execute_disconnect(self) -> None:
         _LOGGER.debug("%s: Disconnecting", self.address)
+        self._cancel_idle_timer()
         async with self._connect_lock:
             client = self._client
             self._expected_disconnect = True
@@ -187,6 +214,9 @@ class GimdowBLEConnection:
         defensive try/get_running_loop to handle edge cases where a
         foreign thread invokes this callback directly.
         """
+        if self._on_demand:
+            self._disconnected_on_demand(client)
+            return
         was_paired = self._is_paired
         self._is_paired = False
         self._fire_disconnected_callbacks()
@@ -207,11 +237,38 @@ class GimdowBLEConnection:
                 return
             loop.call_soon_threadsafe(self._create_safe_task, self._reconnect())
 
+    def _disconnected_on_demand(self, client: BleakClientWithServiceCache) -> None:
+        """On-demand mode: a dropped link is normal; never reconnect here.
+
+        The next command or status refresh connects again via _ensure_connected.
+        """
+        if self._client is not None and client is not self._client:
+            return  # stale callback from an older link
+        self._cancel_idle_timer()
+        self._is_paired = False
+        self._client = None
+        expected = self._expected_disconnect or self._idle_disconnecting
+        self._idle_disconnecting = False
+        self._fire_disconnected_callbacks()
+        _LOGGER.debug(
+            "%s: %s disconnect (on-demand); RSSI: %s",
+            self.address,
+            "Expected" if expected else "Device-side",
+            self.rssi,
+        )
+        try:
+            asyncio.get_running_loop().call_soon_threadsafe(
+                self._create_safe_task, self._reset_seq_num()
+            )
+        except RuntimeError:
+            pass
+
     async def _execute_forced_disconnect(self) -> None:
         """Force disconnect for error recovery. The _disconnected callback
         will trigger _reconnect to restore the persistent connection."""
         _LOGGER.debug("%s: Executing forced disconnect", self.address)
         self._cancel_keep_alive()
+        self._cancel_idle_timer()
         async with self._connect_lock:
             client = self._client
             self._client = None
@@ -273,6 +330,63 @@ class GimdowBLEConnection:
         finally:
             if not self._expected_disconnect:
                 self._schedule_keep_alive()
+
+    # ------------------------------------------------------------------
+    # Idle disconnect (on-demand mode)
+    # ------------------------------------------------------------------
+
+    def _touch_activity(self) -> None:
+        """(Re)arm the idle-disconnect timer; called on every send/receive."""
+        if not self._on_demand or self._expected_disconnect or not self._client:
+            return
+        self._cancel_idle_timer()
+        try:
+            loop = asyncio.get_running_loop()
+        except RuntimeError:
+            return
+        self._idle_timer = loop.call_later(
+            self._IDLE_DISCONNECT_DELAY, self._idle_timer_fired
+        )
+
+    def _cancel_idle_timer(self) -> None:
+        if self._idle_timer:
+            self._idle_timer.cancel()
+            self._idle_timer = None
+
+    def _idle_timer_fired(self) -> None:
+        self._idle_timer = None
+        if (
+            self._connect_lock.locked()
+            or self._operation_lock.locked()
+            or self._input_expected_responses
+        ):
+            self._touch_activity()  # still busy; check again later
+            return
+        if self._client and self._client.is_connected:
+            self._create_safe_task(
+                self._idle_disconnect(), name="gimdow-idle-disconnect"
+            )
+
+    async def _idle_disconnect(self) -> None:
+        # Hold the connect lock so a command arriving now waits for the link to
+        # close and then reconnects, instead of writing into a closing link.
+        async with self._connect_lock:
+            client = self._client
+            if not client or not client.is_connected or self._idle_timer:
+                return  # already gone, or activity re-armed the timer
+            _LOGGER.debug(
+                "%s: Idle for %.0fs — closing link (on-demand mode)",
+                self.address,
+                self._IDLE_DISCONNECT_DELAY,
+            )
+            self._idle_disconnecting = True
+            self._is_paired = False
+            try:
+                await client.disconnect()
+            except BLEAK_EXCEPTIONS as ex:
+                _LOGGER.debug("%s: Idle disconnect failed: %s", self.address, ex)
+            if self._client is client:
+                self._client = None
 
     # ------------------------------------------------------------------
     # Connect / reconnect
@@ -372,7 +486,8 @@ class GimdowBLEConnection:
                 ex,
             )
             self._client = None
-            self._create_safe_task(self._reconnect())
+            if not self._on_demand:
+                self._create_safe_task(self._reconnect())
             return False
 
     async def _do_device_info_handshake(
@@ -436,7 +551,10 @@ class GimdowBLEConnection:
                     self.rssi,
                 )
                 self._last_connect_time = _monotonic()
-                self._schedule_keep_alive()
+                if self._on_demand:
+                    self._touch_activity()
+                else:
+                    self._schedule_keep_alive()
                 self._fire_connected_callbacks()
             else:
                 _LOGGER.warning(
@@ -590,6 +708,7 @@ class GimdowBLEConnection:
             _LOGGER.debug("%s: Sending #%s %s", self.address, seq_num, code.name)
 
         packets = self._build_packets(seq_num, code, data, response_to)
+        self._touch_activity()
         await self._int_send_packet_while_connected(packets)
 
         if future:
@@ -604,6 +723,7 @@ class GimdowBLEConnection:
                 result = False
             finally:
                 self._input_expected_responses.pop(seq_num, None)
+                self._touch_activity()
 
         return result
 

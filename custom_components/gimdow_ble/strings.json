@@ -137,10 +137,12 @@
           "adapter": "Bluetooth Adapter (Optional)",
           "unknown_state_action": "Action when Lock State is Unknown",
           "transition_timeout": "State Transition Timeout (seconds)",
-          "auto_lock_delay_fallback": "Auto-lock Fallback Delay (seconds)"
+          "auto_lock_delay_fallback": "Auto-lock Fallback Delay (seconds)",
+          "connection_mode": "Connection Mode"
         },
         "data_description": {
-          "unknown_state_action": "After a BLE reconnect the lock state is unknown until the motor physically moves. 'Confirm Last' and 'Force Lock Twice' resolve state automatically on reconnect. 'Double on Action' waits and resolves only when you issue the next lock or unlock command. Note: When State Transition Timeout is set to 0, all strategies use a 60-second minimum echo timeout."
+          "unknown_state_action": "After a BLE reconnect the lock state is unknown until the motor physically moves. 'Confirm Last' and 'Force Lock Twice' resolve state automatically on reconnect. 'Double on Action' waits and resolves only when you issue the next lock or unlock command. Note: When State Transition Timeout is set to 0, all strategies use a 60-second minimum echo timeout.",
+          "connection_mode": "Persistent keeps the Bluetooth link open (renewed every 45 s), so manual operations of the lock show up immediately. On Demand connects only to send a command or for an hourly status refresh and closes the link after 30 s idle, the way the stock Tuya gateway handles this lock. It saves the lock's battery and adds ~1-3 s to each command, but a manual operation done while no link is up is only seen at the next connection."
         },
         "description": "Configure optional settings for the Gimdow Lock."
       }
@@ -152,6 +154,12 @@
         "confirm_last": "Confirm last known state (auto on reconnect)",
         "double_on_action": "Keep unknown — double-command on next action",
         "force_lock_twice": "Force lock twice (auto on reconnect)"
+      }
+    },
+    "connection_mode": {
+      "options": {
+        "persistent": "Persistent — always connected (fastest, uses more battery)",
+        "on_demand": "On demand — connect only when needed (battery saver)"
       }
     }
   }

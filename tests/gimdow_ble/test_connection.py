@@ -904,3 +904,126 @@ class TestExecuteForcedDisconnect:
         conn._client = mock_client
         await conn._execute_forced_disconnect()
         assert conn._client is None
+
+
+# ---------------------------------------------------------------------------
+# On-demand connection mode
+# ---------------------------------------------------------------------------
+
+
+def _make_on_demand_stub() -> _StubConnection:
+    conn = _StubConnection()
+    conn._init_connection()
+    conn._input_expected_responses = {}
+    conn.set_on_demand(True)
+    return conn
+
+
+class TestOnDemandMode:
+    def test_default_is_persistent(self) -> None:
+        conn = _StubConnection()
+        conn._init_connection()
+        assert conn.on_demand is False
+
+    def test_set_on_demand(self) -> None:
+        assert _make_on_demand_stub().on_demand is True
+
+    def test_disconnect_never_reconnects(self) -> None:
+        conn = _make_on_demand_stub()
+        client = MagicMock()
+        conn._client = client
+        conn._is_paired = True
+        conn._reconnect = AsyncMock()
+        conn._create_safe_task = MagicMock(side_effect=lambda coro, **_kw: coro.close())
+        cb = MagicMock()
+        conn.register_disconnected_callback(cb)
+        conn._disconnected(client)
+        conn._reconnect.assert_not_called()
+        assert conn._client is None
+        assert conn._is_paired is False
+        cb.assert_called_once()
+
+    def test_stale_disconnect_callback_ignored(self) -> None:
+        conn = _make_on_demand_stub()
+        current = MagicMock()
+        conn._client = current
+        conn._is_paired = True
+        conn._disconnected(MagicMock())  # an older link
+        assert conn._client is current
+        assert conn._is_paired is True
+
+    def test_finalize_arms_idle_timer_not_keep_alive(self) -> None:
+        conn = _make_on_demand_stub()
+        conn._client = _make_ble_client()
+        conn._is_paired = True
+        conn._schedule_keep_alive = MagicMock()
+        conn._touch_activity = MagicMock()
+        conn._finalize_connection()
+        conn._touch_activity.assert_called_once()
+        conn._schedule_keep_alive.assert_not_called()
+
+    def test_finalize_persistent_schedules_keep_alive(self) -> None:
+        conn = _StubConnection()
+        conn._init_connection()
+        conn._client = _make_ble_client()
+        conn._is_paired = True
+        conn._schedule_keep_alive = MagicMock()
+        conn._finalize_connection()
+        conn._schedule_keep_alive.assert_called_once()
+
+    async def test_touch_activity_noop_in_persistent_mode(self) -> None:
+        conn = _StubConnection()
+        conn._init_connection()
+        conn._client = _make_ble_client()
+        conn._touch_activity()
+        assert conn._idle_timer is None
+
+    async def test_touch_activity_arms_timer(self) -> None:
+        conn = _make_on_demand_stub()
+        conn._client = _make_ble_client()
+        conn._touch_activity()
+        assert conn._idle_timer is not None
+        conn._cancel_idle_timer()
+        assert conn._idle_timer is None
+
+    async def test_touch_activity_noop_without_client(self) -> None:
+        conn = _make_on_demand_stub()
+        conn._touch_activity()
+        assert conn._idle_timer is None
+
+    async def test_idle_timer_rearms_while_response_pending(self) -> None:
+        conn = _make_on_demand_stub()
+        conn._client = _make_ble_client()
+        conn._input_expected_responses = {1: asyncio.Future()}
+        conn._create_safe_task = MagicMock()
+        conn._idle_timer_fired()
+        conn._create_safe_task.assert_not_called()
+        assert conn._idle_timer is not None
+        conn._cancel_idle_timer()
+
+    async def test_idle_disconnect_closes_link(self) -> None:
+        conn = _make_on_demand_stub()
+        client = _make_ble_client()
+        conn._client = client
+        conn._is_paired = True
+        await conn._idle_disconnect()
+        client.disconnect.assert_awaited_once()
+        assert conn._client is None
+        assert conn._is_paired is False
+
+    async def test_idle_disconnect_skipped_when_activity_rearmed(self) -> None:
+        conn = _make_on_demand_stub()
+        client = _make_ble_client()
+        conn._client = client
+        conn._touch_activity()  # activity after the timer fired
+        await conn._idle_disconnect()
+        client.disconnect.assert_not_awaited()
+        conn._cancel_idle_timer()
+
+    async def test_subscribe_failure_does_not_spawn_reconnect(self) -> None:
+        conn = _make_on_demand_stub()
+        client = _make_ble_client()
+        client.start_notify = AsyncMock(side_effect=BleakError("gone"))
+        conn._create_safe_task = MagicMock()
+        assert await conn._subscribe_notifications(client) is False
+        conn._create_safe_task.assert_not_called()
