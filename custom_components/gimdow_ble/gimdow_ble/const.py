@@ -14,6 +14,11 @@ CHARACTERISTIC_WRITE = "00002b11-0000-1000-8000-00805f9b34fb"
 SERVICE_UUID = "0000a201-0000-1000-8000-00805f9b34fb"
 
 MANUFACTURER_DATA_ID = 0x07D0
+# Flags byte (first byte of the 0x07D0 manufacturer data, scan response), as
+# set by the Tuya BLE SDK: bit 7 bound, bit 1 shared, bit 0 connect request
+# ("a gateway should connect to me"). Only seen with active scanning.
+ADV_FLAG_BOUND = 0x80
+ADV_FLAG_CONNECT_REQUEST = 0x01
 
 RESPONSE_WAIT_TIMEOUT = 60
 

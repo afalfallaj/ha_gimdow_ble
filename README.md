@@ -194,7 +194,7 @@ How the integration uses the Bluetooth link to the lock.
 | **Persistent** *(default)* | Keeps the link open, renewing the lock's 60 s session every 45 s, and reconnects after any drop. | Manual operations (key, knob, keypad) show up in HA immediately. The lock's radio stays active all the time, which costs battery. |
 | **On Demand** | Connects only to send a command or for an hourly status refresh (battery etc.), then closes the link after 30 s without traffic. Availability follows the lock's Bluetooth adverts instead of the link. | Saves battery. Each command takes ~1–3 s longer (connect + handshake first). A manual operation (key, knob, keypad) done while no link is up is never reported by the lock, not in its adverts and not on the next connection, so the shown state can be stale; for that reason lock/unlock commands are always sent, even when the lock already appears to be in the target state. |
 
-On Demand mirrors how the stock Tuya gateway firmware handles this lock: it treats it as a low-power device that is never connected proactively, connects only when a command is queued, and takes online status from adverts. The lock itself ends an idle session after 60 s.
+On Demand mirrors how the stock Tuya gateway firmware handles this lock: it treats it as a low-power device that is never connected proactively, connects only when a command is queued or when the lock raises the connect-request flag in its advert (bit 0 of the Tuya manufacturer-data flags byte, which lives in the scan response, so the scanner must scan actively), and takes online status from adverts. The integration does the same. The lock itself ends an idle session after 60 s.
 
 ---
 

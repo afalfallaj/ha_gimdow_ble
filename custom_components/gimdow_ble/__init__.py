@@ -93,7 +93,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: GimdowBLEConfigEntry) ->
         device.set_ble_device_and_advertisement_data(
             service_info.device, service_info.advertisement
         )
-        coordinator.async_handle_advertisement()
+        coordinator.async_handle_advertisement(service_info)
 
     entry.async_on_unload(
         bluetooth.async_register_callback(
