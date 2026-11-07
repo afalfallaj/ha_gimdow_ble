@@ -52,6 +52,7 @@ def _make_manager(
     is_locked_return: bool | None = None,
     transition_timeout: float = 0,
     has_door_sensor: bool = False,
+    on_demand: bool = False,
 ) -> tuple[GimdowBLELockManager, MagicMock, MagicMock]:
     """Return (manager, hass_mock, device_mock)."""
     device = MagicMock()
@@ -75,6 +76,7 @@ def _make_manager(
         unlock_value=True,
         get_auto_lock=lambda: virtual_auto_lock,
         has_door_sensor=has_door_sensor,
+        on_demand=on_demand,
     )
 
     mgr = GimdowBLELockManager(device, hass, config, MagicMock())
@@ -1211,3 +1213,33 @@ class TestLockUnknownState:
         await mgr._double_command_to_state(True)
         assert mgr.is_timeout_unknown is True
 
+
+
+# ---------------------------------------------------------------------------
+# On-demand connection mode: known state may be stale
+# ---------------------------------------------------------------------------
+
+
+class TestOnDemandAlwaysSends:
+    """A manual operation while no link is up is never reported, so the shown
+    state may be stale: commands must not be skipped as 'already there'."""
+
+    async def test_lock_sent_even_when_shown_locked(self) -> None:
+        mgr, _, device = _make_manager(is_locked_return=True, on_demand=True)
+        await mgr.lock()
+        device.send_control_datapoint.assert_awaited_once_with(46, True)
+
+    async def test_unlock_sent_even_when_shown_unlocked(self) -> None:
+        mgr, _, device = _make_manager(is_locked_return=False, on_demand=True)
+        await mgr.unlock()
+        device.send_control_datapoint.assert_awaited_once_with(6, True)
+
+    async def test_persistent_still_skips_when_already_locked(self) -> None:
+        mgr, _, device = _make_manager(is_locked_return=True, on_demand=False)
+        await mgr.lock()
+        device.send_control_datapoint.assert_not_awaited()
+
+    async def test_persistent_still_skips_when_already_unlocked(self) -> None:
+        mgr, _, device = _make_manager(is_locked_return=False, on_demand=False)
+        await mgr.unlock()
+        device.send_control_datapoint.assert_not_awaited()

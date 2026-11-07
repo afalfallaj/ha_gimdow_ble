@@ -263,3 +263,121 @@ class TestReconnectSchedulesDeviceUpdate:
         coord._async_handle_connect()
         await asyncio.sleep(0)
         fake_unsub.assert_called_once()
+
+
+# ---------------------------------------------------------------------------
+# On-demand connection mode
+# ---------------------------------------------------------------------------
+
+
+class TestOnDemandCoordinator:
+    def test_persistent_has_no_update_interval(self, hass) -> None:
+        coord = GimdowBLECoordinator(hass, _make_device())
+        assert coord.update_interval is None
+
+    def test_on_demand_refreshes_periodically(self, hass) -> None:
+        from custom_components.gimdow_ble.const import ON_DEMAND_REFRESH_INTERVAL
+
+        coord = GimdowBLECoordinator(hass, _make_device(), on_demand=True)
+        assert coord.update_interval.total_seconds() == ON_DEMAND_REFRESH_INTERVAL
+
+    def test_on_demand_link_drop_does_not_start_grace_timer(self, hass) -> None:
+        """A closed link is the normal idle state in on-demand mode."""
+        dev = _make_device()
+        with patch(
+            "custom_components.gimdow_ble.devices.bluetooth"
+        ) as bt:
+            bt.async_track_unavailable.return_value = MagicMock()
+            GimdowBLECoordinator(hass, dev, on_demand=True)
+            bt.async_track_unavailable.assert_called_once()
+        dev.register_disconnected_callback.assert_not_called()
+
+    def test_on_demand_unavailable_starts_grace_timer(self, hass) -> None:
+        with patch("custom_components.gimdow_ble.devices.bluetooth"):
+            coord = GimdowBLECoordinator(hass, _make_device(), on_demand=True)
+        coord._unsub_disconnect = None
+        with patch("custom_components.gimdow_ble.devices.async_call_later") as acl:
+            acl.return_value = MagicMock()
+            coord._async_handle_unavailable(MagicMock())
+        acl.assert_called_once()
+
+    async def test_on_demand_advert_restores_reachability(self, hass) -> None:
+        dev = _make_device()
+        with patch("custom_components.gimdow_ble.devices.bluetooth"):
+            coord = GimdowBLECoordinator(hass, dev, on_demand=True)
+        coord._disconnected = True
+        coord.async_handle_advertisement()
+        await asyncio.sleep(0)
+        assert coord.connected is True
+        dev.schedule_update.assert_called_once()
+
+    def test_on_demand_advert_cancels_grace_timer(self, hass) -> None:
+        with patch("custom_components.gimdow_ble.devices.bluetooth"):
+            coord = GimdowBLECoordinator(hass, _make_device(), on_demand=True)
+        unsub = MagicMock()
+        coord._unsub_disconnect = unsub
+        coord.async_handle_advertisement()
+        unsub.assert_called_once()
+        assert coord._unsub_disconnect is None
+
+    def test_persistent_ignores_adverts(self, hass) -> None:
+        coord = GimdowBLECoordinator(hass, _make_device())
+        coord._disconnected = True
+        coord.async_handle_advertisement()
+        assert coord.connected is False
+
+
+# ---------------------------------------------------------------------------
+# On-demand: the lock's connect-request advert flag
+# ---------------------------------------------------------------------------
+
+
+def _service_info(flags: int | None) -> MagicMock:
+    info = MagicMock()
+    info.manufacturer_data = (
+        {} if flags is None else {0x07D0: bytes([flags, 0x03, 0x00, 0x00, 0x01, 0x00, 0x07])}
+    )
+    return info
+
+
+def _on_demand_coordinator(hass) -> GimdowBLECoordinator:
+    with patch("custom_components.gimdow_ble.devices.bluetooth"):
+        coord = GimdowBLECoordinator(hass, _make_device(), on_demand=True)
+    coord._unsub_disconnect = None
+    coord._disconnected = False
+    coord.async_request_refresh = AsyncMock()
+    return coord
+
+
+class TestConnectRequestFlag:
+    async def test_flag_set_triggers_refresh(self, hass) -> None:
+        coord = _on_demand_coordinator(hass)
+        coord.async_handle_advertisement(_service_info(0x81))
+        await asyncio.sleep(0)
+        coord.async_request_refresh.assert_awaited_once()
+
+    async def test_bound_only_does_not_connect(self, hass) -> None:
+        coord = _on_demand_coordinator(hass)
+        coord.async_handle_advertisement(_service_info(0x80))
+        await asyncio.sleep(0)
+        coord.async_request_refresh.assert_not_awaited()
+
+    async def test_no_manufacturer_data_does_not_connect(self, hass) -> None:
+        coord = _on_demand_coordinator(hass)
+        coord.async_handle_advertisement(_service_info(None))
+        await asyncio.sleep(0)
+        coord.async_request_refresh.assert_not_awaited()
+
+    async def test_flag_rate_limited(self, hass) -> None:
+        coord = _on_demand_coordinator(hass)
+        coord.async_handle_advertisement(_service_info(0x81))
+        coord.async_handle_advertisement(_service_info(0x81))
+        await asyncio.sleep(0)
+        assert coord.async_request_refresh.await_count == 1
+
+    async def test_flag_ignored_in_persistent_mode(self, hass) -> None:
+        coord = GimdowBLECoordinator(hass, _make_device())
+        coord.async_request_refresh = AsyncMock()
+        coord.async_handle_advertisement(_service_info(0x81))
+        await asyncio.sleep(0)
+        coord.async_request_refresh.assert_not_awaited()

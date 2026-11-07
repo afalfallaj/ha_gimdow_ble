@@ -89,6 +89,11 @@ class LockManagerConfig:
     unlock_value: bool
     get_auto_lock: Callable[[], bool]
     has_door_sensor: bool = False
+    # On-demand connection mode: the known state can be stale (a manual
+    # operation while no BLE link is up is never reported, not even on the next
+    # connection), so commands are always sent instead of being skipped when the
+    # lock already appears to be in the target state.
+    on_demand: bool = False
 
 
 class PendingLockIntent:
@@ -447,10 +452,16 @@ class GimdowBLELockManager:
 
         # --- Already locked ---
         if is_locked is True:
+            if not self._config.on_demand:
+                _LOGGER.debug(
+                    "[%s] Already locked — no command sent.", self._device.address
+                )
+                return
             _LOGGER.debug(
-                "[%s] Already locked — no command sent.", self._device.address
+                "[%s] Shown as locked, but the state may be stale (on-demand "
+                "mode) — sending the command anyway.",
+                self._device.address,
             )
-            return
 
         # --- Unknown state ---
         if is_locked is None:
@@ -525,10 +536,16 @@ class GimdowBLELockManager:
 
         # --- Already unlocked ---
         if is_locked is False:
+            if not self._config.on_demand:
+                _LOGGER.debug(
+                    "[%s] Already unlocked — no command sent.", self._device.address
+                )
+                return
             _LOGGER.debug(
-                "[%s] Already unlocked — no command sent.", self._device.address
+                "[%s] Shown as unlocked, but the state may be stale (on-demand "
+                "mode) — sending the command anyway.",
+                self._device.address,
             )
-            return
 
         # --- Normal unlock ---
         self._transition_state = LockTransitionState.UNLOCKING

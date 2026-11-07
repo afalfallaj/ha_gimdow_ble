@@ -41,6 +41,7 @@ class _DataUpdateCoordinator:
         self.hass = hass
         self.logger = logger
         self.name = name
+        self.update_interval = update_interval
 
     def async_update_listeners(self) -> None:
         pass

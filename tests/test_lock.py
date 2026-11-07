@@ -23,9 +23,12 @@ from custom_components.gimdow_ble.devices import GimdowBLEData
 from custom_components.gimdow_ble.lock import GimdowBLELock, GimdowBLELockMapping
 
 
-def _make_device(*, address: str = "AA:BB:CC:DD:EE:FF") -> MagicMock:
+def _make_device(
+    *, address: str = "AA:BB:CC:DD:EE:FF", on_demand: bool = False
+) -> MagicMock:
     dev = MagicMock()
     dev.address = address
+    dev.on_demand = on_demand
     dev.category = "jtmspro"
     dev.product_id = "rlyxv7pe"
     dev.name = "My Lock"
@@ -147,3 +150,26 @@ class TestAutoLockArmingOnConnect:
 
         entity._lock_manager.on_connected.assert_called_once()
         entity._lock_manager.arm_auto_lock_if_idle.assert_not_called()
+
+
+# ---------------------------------------------------------------------------
+# On-demand connection mode
+# ---------------------------------------------------------------------------
+
+
+class TestOnDemandHandshake:
+    def test_handshake_does_not_call_on_connected_in_on_demand_mode(self) -> None:
+        """Every command opens a link in on-demand mode; the handshake must not
+        reset the in-flight transition or start an unknown-state resolution."""
+        entity, _ = _make_lock(_make_device(on_demand=True))
+        entity._lock_manager = MagicMock()
+        entity.async_write_ha_state = MagicMock()
+        entity._on_ble_reconnected()
+        entity._lock_manager.on_connected.assert_not_called()
+
+    def test_handshake_calls_on_connected_in_persistent_mode(self) -> None:
+        entity, _ = _make_lock(_make_device(on_demand=False))
+        entity._lock_manager = MagicMock()
+        entity.async_write_ha_state = MagicMock()
+        entity._on_ble_reconnected()
+        entity._lock_manager.on_connected.assert_called_once()
